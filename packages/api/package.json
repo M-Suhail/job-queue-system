@@ -1,0 +1,22 @@
+{
+  "name": "job-queue-api",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "uuid": "^9.0.0",
+    "ioredis": "^5.0",
+    "pg": "^8.0",
+    "dotenv": "^16.0"
+  },
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0",
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.0.0"
+  }
+}

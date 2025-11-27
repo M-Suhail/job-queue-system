@@ -1,0 +1,19 @@
+{
+  "name": "job-queue-worker",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/worker.js"
+  },
+  "dependencies": {
+    "ioredis": "^5.0",
+    "pg": "^8.0",
+    "dotenv": "^16.0"
+  },
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0",
+    "@types/node": "^20.0.0"
+  }
+}
