@@ -12,3 +12,8 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+
+ALTER TABLE jobs
+  ADD COLUMN IF NOT EXISTS next_run_at TIMESTAMPTZ DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_jobs_next_run_at ON jobs(next_run_at);
