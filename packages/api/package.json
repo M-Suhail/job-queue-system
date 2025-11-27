@@ -8,7 +8,7 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@jobqueue/common": "workspace:*",
+    "@jobqueue/common": "file:../common",
     "express": "^4.18.2",
     "uuid": "^9.0.0",
     "ioredis": "^5.0",

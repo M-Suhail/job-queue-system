@@ -1,0 +1,11 @@
+{
+  "name": "job-queue",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "bootstrap": "npm install",
+    "build": "npm run build -w @jobqueue/common && npm run build -w job-queue-api && npm run build -w job-queue-worker"
+  }
+}
