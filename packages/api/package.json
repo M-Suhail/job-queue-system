@@ -1,12 +1,14 @@
 {
   "name": "job-queue-api",
   "version": "0.0.1",
+  "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@jobqueue/common": "workspace:*",
     "express": "^4.18.2",
     "uuid": "^9.0.0",
     "ioredis": "^5.0",
