@@ -23,10 +23,10 @@ app.post('/jobs', async (req, res) => {
 
   try {
     await query(
-      `INSERT INTO jobs(id, type, payload, status, attempts, max_attempts, idempotency_key, created_at, updated_at)
-       VALUES($1,$2,$3,'pending',0,$4,$5,$6,$6)`,
-      [id, type, JSON.stringify(payload), maxAttempts, idempotencyKey || null, now]
-    );
+    `INSERT INTO jobs(id, type, payload, status, attempts, max_attempts, idempotency_key, next_run_at, created_at, updated_at)
+    VALUES($1,$2,$3,'pending',0,$4,$5,$6,$7,$7)`,
+    [id, type, JSON.stringify(payload), maxAttempts, idempotencyKey || null, now, now]
+  );
 
     // push job id to a simple Redis list queue
     await redis.rpush('queue:jobs', id);
