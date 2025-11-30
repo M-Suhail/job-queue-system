@@ -1,7 +1,11 @@
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
+import express from 'express';
 import { query } from '@jobqueue/common/src/db';
 import { getHandler } from './handlers';
+import { logger } from '@jobqueue/common/src/logger';
+import './metrics-server';
+import { jobsProcessed, jobsFailed, jobsDeadLetter } from '@jobqueue/common/src/metrics';
 
 dotenv.config();
 
@@ -31,7 +35,7 @@ async function moveDueJobsToReady(limit = 100) {
     const removed = await redis.zrem(DELAYED_ZSET, jobId);
     if (removed) {
       await redis.rpush(READY_QUEUE, jobId);
-      console.log(`[sweeper] moved job ${jobId} to ready`);
+      logger.info({ jobId }, `[sweeper] moved job ${jobId} to ready`);
     }
   }
 }
@@ -40,7 +44,7 @@ async function sweeperLoop() {
   try {
     await moveDueJobsToReady();
   } catch (err:any) {
-    console.error('[sweeper] error', err);
+    logger.error({ err }, '[sweeper] error');
   } finally {
     setTimeout(sweeperLoop, SWEEP_INTERVAL_MS);
   }
@@ -50,41 +54,54 @@ async function claimAndProcess(jobId: string) {
   const res = await query('SELECT * FROM jobs WHERE id=$1', [jobId]);
   const job = res.rows[0];
   if (!job) {
-    console.warn('job not found', jobId);
+    logger.warn({ jobId }, 'job not found');
     return;
   }
 
+  // If job scheduled for future, ensure it's in delayed ZSET and skip processing now
   if (job.next_run_at && new Date(job.next_run_at).getTime() > Date.now()) {
     await redis.zadd(DELAYED_ZSET, new Date(job.next_run_at).getTime(), jobId);
+    logger.info({ jobId, nextRunAt: job.next_run_at }, 'job scheduled for future; added to delayed set');
     return;
   }
 
+  // mark as in_progress
   await query('UPDATE jobs SET status=$1, updated_at=now() WHERE id=$2', ['in_progress', jobId]);
 
   const handler = getHandler(job.type);
   if (!handler) {
     const errMsg = `no handler for type=${job.type}`;
-    console.error(errMsg);
+    logger.error({ jobId, jobType: job.type, errMsg }, 'no handler found - moving to dead_letter');
     await query('UPDATE jobs SET status=$1, last_error=$2, updated_at=now() WHERE id=$3', ['dead_letter', errMsg, jobId]);
+    jobsDeadLetter.inc();
     return;
   }
 
+  const start = Date.now();
   try {
-    console.log(`[${WORKER_ID}] processing job=${jobId} type=${job.type} attempts=${job.attempts}`);
+    logger.info({ workerId: WORKER_ID, jobId, type: job.type, attempts: job.attempts }, 'processing job');
     const payload = job.payload;
     await handler(payload, { jobId });
 
+    // mark success (increment attempts once to reflect the final try)
     await query('UPDATE jobs SET status=$1, attempts=$2, updated_at=now() WHERE id=$3', ['succeeded', (job.attempts || 0) + 1, jobId]);
-    console.log(`[${WORKER_ID}] job=${jobId} succeeded`);
+    jobsProcessed.inc();
+    logger.info({ workerId: WORKER_ID, jobId, durationMs: Date.now() - start }, 'job succeeded');
   } catch (err:any) {
     const attempts = (job.attempts || 0) + 1;
     const errMsg = err?.message ?? String(err);
-    console.error(`[${WORKER_ID}] job=${jobId} failed attempt=${attempts} err=${errMsg}`);
+
+    // every failure increments failure counter
+    jobsFailed.inc();
+    logger.error({ workerId: WORKER_ID, jobId, attempt: attempts, err: errMsg }, 'job handler threw error');
 
     if (attempts >= (job.max_attempts || 5)) {
+      // move to dead-letter
       await query('UPDATE jobs SET status=$1, attempts=$2, last_error=$3, updated_at=now() WHERE id=$4', ['dead_letter', attempts, errMsg, jobId]);
-      console.log(`[${WORKER_ID}] job=${jobId} moved to dead_letter after ${attempts} attempts`);
+      jobsDeadLetter.inc();
+      logger.warn({ workerId: WORKER_ID, jobId, attempts }, 'job moved to dead_letter after max attempts');
     } else {
+      // schedule retry with exponential backoff + jitter
       const delaySec = backoffSeconds(attempts);
       const nextRun = new Date(Date.now() + delaySec * 1000).toISOString();
       await query(
@@ -92,7 +109,7 @@ async function claimAndProcess(jobId: string) {
         ['failed', attempts, errMsg, nextRun, jobId]
       );
       await redis.zadd(DELAYED_ZSET, Date.now() + delaySec * 1000, jobId);
-      console.log(`[${WORKER_ID}] job=${jobId} requeued for ${delaySec}s (next_run_at=${nextRun})`);
+      logger.info({ workerId: WORKER_ID, jobId, attempts, delaySec, nextRun }, 'job requeued with backoff');
     }
   }
 }
@@ -109,13 +126,13 @@ async function workerLoop() {
       }
       await claimAndProcess(id);
     } catch (err:any) {
-      console.error('worker main loop error', err);
+      logger.error({ err }, 'worker main loop error');
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
 }
 
 workerLoop().catch((err) => {
-  console.error('worker crashed', err);
+  logger.error({ err }, 'worker crashed');
   process.exit(1);
 });

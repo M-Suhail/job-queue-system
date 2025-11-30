@@ -6,9 +6,18 @@
   ],
   "scripts": {
     "bootstrap": "npm install",
-    "build": "npm run build -w @jobqueue/common && npm run build -w job-queue-api && npm run build -w job-queue-worker"
+    "build": "npm run build -w @jobqueue/common && npm run build -w job-queue-api && npm run build -w job-queue-worker",
+    "lint": "eslint . --ext .ts"
   },
   "devDependencies": {
-    "@types/pg": "^8.15.6"
+    "@types/pg": "^8.15.6",
+    "@types/pino": "^7.0.4",
+    "eslint": "^9.39.1"
+  },
+  "dependencies": {
+    "express-prom-bundle": "^8.0.0",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2",
+    "prom-client": "^15.1.3"
   }
 }

@@ -1,27 +1,32 @@
-# Job Queue System (Phase 2)
+# Job Queue System (API + Worker + Retry + Delays + Metrics + Logging)
 
-A distributed job queue system built with Node.js, TypeScript, Postgres, and Redis. Supports job creation, delayed scheduling, retries with exponential backoff, dead-letter handling, and multiple job types.
+A fully functioning distributed job queue built with:
 
-## Overview
+- Node.js (TypeScript)
+- Express
+- PostgreSQL
+- Redis (queue + delayed ZSET)
+- Pino (structured logging)
+- Prometheus (metrics)
+- Docker (infra)
+- GitHub Actions (CI)
 
-This project is structured as a monorepo containing:
-- packages/common – shared db code
-- packages/api – REST API
-- packages/worker – background job processor
+Supports:
+- background job processing
+- retries with exponential backoff
+- delayed jobs
+- dead-letter queue
+- worker autoscaling support
+- metrics for monitoring
+- structured JSON logging
+- stale job reaper
+- API + Worker separation
+- monorepo (npm workspaces)
 
-Phase 2 adds:
-- Handler registry
-- next_run_at scheduling
-- Redis delayed ZSET
-- Sweeper loop
-- Exponential retry with jitter
-- Dead letter queue
+## Repository Structure
 
-## Project Structure
 ```
 job-queue/
-  package.json
-  tsconfig.json
   packages/
     common/
     api/
@@ -29,101 +34,97 @@ job-queue/
   infra/
     docker-compose.yml
     init.sql
-    .env.example
+  .github/
+    workflows/
+      ci.yml
   README.md
 ```
 
-## Setup
+## Phase Highlights
 
-### 1. Copy env
-```
-cp infra/.env.example .env
-```
+### Phase 1 — Core Queue
+- API create jobs
+- Worker processes jobs
+- Redis list for ready queue
+- PostgreSQL schema
+- Base handlers
 
-### 2. Start Postgres + Redis
+### Phase 2 — Scheduling + Retries
+- next_run_at
+- delayed jobs (Redis ZSET)
+- sweeper
+- exponential backoff
+- dead-letter support
+
+### Phase 3 — Observability + Reliability
+- structured logging via Pino
+- Prometheus metrics (API + worker)
+- /metrics endpoints
+- worker metrics server
+- job counters + queue length gauge
+- stale job reaper script
+- GitHub Actions CI
+- deep health check
+
+## Running Infra
+
 ```
 docker compose -f infra/docker-compose.yml up -d
 ```
 
-### 3. Apply DB Migration
-```
-ALTER TABLE jobs ADD COLUMN IF NOT EXISTS next_run_at TIMESTAMPTZ DEFAULT now();
-CREATE INDEX IF NOT EXISTS idx_jobs_next_run_at ON jobs(next_run_at);
-```
+## Running API
 
-### 4. Install dependencies
-```
-npm install
-```
-
-### 5. Start API
 ```
 cd packages/api
 npm run dev
 ```
 
-### 6. Start Worker
+Available endpoints:
+
+- POST /jobs
+- GET /jobs/:id
+- GET /health
+- GET /metrics
+
+## Running Worker
+
 ```
 cd packages/worker
 npm run dev
 ```
 
-## Usage (Postman)
+Metrics server: http://localhost:9100/metrics
 
-### Create job (sendEmail)
-```
+## Submit Job Example
+
 POST /jobs
+```json
 {
   "type": "sendEmail",
   "payload": { "to": "user@example.com" }
 }
 ```
 
-### Create job (failOnce)
-```
-POST /jobs
-{
-  "type": "failOnce",
-  "payload": { "failUntil": 3 }
-}
-```
+## Check Job Status
 
-### Get job
+GET /jobs/<id>
+
+## Reaper
+
 ```
-GET /jobs/:id
+cd packages/worker
+npm run reaper
 ```
 
-## Queries
+## CI Pipeline
 
-### SQL
+Located at:
 ```
-SELECT id, type, status, attempts, next_run_at, last_error
-FROM jobs ORDER BY created_at DESC LIMIT 20;
-```
-
-### Redis
-```
-LLEN queue:jobs
-ZCARD delayed:jobs
+.github/workflows/ci.yml
 ```
 
-## Troubleshooting
-- Sweeper not running: check worker logs
-- Jobs stuck in_progress: worker crash; needs stale job reaper
-- Different Postgres instances: check DATABASE_URL
-
-## Phase 2 Changes
-- Added handler registry
-- Added retries + backoff
-- Added sweeper
-- Added delayed ZSET
-- API sets next_run_at
-- Updated init.sql
-
-## Next: Phase 3
-- Logging
-- Metrics
-- Reaper
-- CI
-- Dashboard
-
+Runs:
+- install
+- typecheck
+- build
+- lint

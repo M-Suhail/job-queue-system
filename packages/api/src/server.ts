@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
 import { query } from '@jobqueue/common/src/db';
+import { logger } from '@jobqueue/common/src/logger';
+import { jobsSubmitted, register as metricsRegister, queueLengthGauge } from '@jobqueue/common/src/metrics';
 
 dotenv.config();
 
@@ -31,9 +33,12 @@ app.post('/jobs', async (req, res) => {
     // push job id to a simple Redis list queue
     await redis.rpush('queue:jobs', id);
 
+    jobsSubmitted.inc(); // metric
+    logger.info({ jobId: id, type }, 'job created');
+
     res.status(201).json({ id });
   } catch (err:any) {
-    console.error('Insert job error', err);
+    logger.error({ err }, 'insert job error');
     res.status(500).json({ error: 'internal' });
   }
 });
@@ -45,7 +50,31 @@ app.get('/jobs/:id', async (req, res) => {
   res.json(result.rows[0]);
 });
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/metrics', async (_req, res) => {
+  try {
+    const len = await redis.llen('queue:jobs');
+    queueLengthGauge.set(len);
+    res.set('Content-Type', metricsRegister.contentType);
+    res.end(await metricsRegister.metrics());
+  } catch (err:any) {
+    logger.error({ err }, 'metrics error');
+    res.status(500).end();
+  }
+});
+
+app.get('/health', async (_req, res) => {
+  try {
+    // simple DB check
+    await query('SELECT 1');
+    // redis ping
+    const pong = await redis.ping();
+    if (pong !== 'PONG') throw new Error('redis not ok');
+    res.json({ status: 'ok' });
+  } catch (err:any) {
+    logger.error({ err }, 'health check failed');
+    res.status(500).json({ status: 'fail', error: err.message });
+  }
+});
 
 const port = parseInt(process.env.API_PORT || '3000', 10);
-app.listen(port, () => console.log(`API listening ${port}`));
+app.listen(port, () => logger.info({ port }, 'API listening'));
