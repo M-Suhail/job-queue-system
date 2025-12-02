@@ -1,27 +1,29 @@
-# Job Queue System (API + Worker + Retry + Delays + Metrics + Logging)
+# Job Queue System (API + Worker + Scheduling + Retries + Metrics + Logging + Phase 4 Controls)
 
 A fully functioning distributed job queue built with:
 
 - Node.js (TypeScript)
 - Express
 - PostgreSQL
-- Redis (queue + delayed ZSET)
+- Redis
 - Pino (structured logging)
 - Prometheus (metrics)
-- Docker (infra)
-- GitHub Actions (CI)
+- Docker
+- GitHub Actions CI
 
 Supports:
 - background job processing
 - retries with exponential backoff
-- delayed jobs
+- delayed jobs with scheduling
 - dead-letter queue
-- worker autoscaling support
+- worker auto-scaling support
 - metrics for monitoring
 - structured JSON logging
 - stale job reaper
-- API + Worker separation
-- monorepo (npm workspaces)
+- pause/resume workers (Phase 4)
+- job cancellation (Phase 4)
+- idempotency keys to prevent duplicates (Phase 4)
+- optimistic job claiming + concurrency (Phase 4)
 
 ## Repository Structure
 
@@ -40,31 +42,49 @@ job-queue/
   README.md
 ```
 
-## Phase Highlights
-
-### Phase 1 — Core Queue
-- API create jobs
+## Phase 1 — Core Queue
+- API for creating jobs
 - Worker processes jobs
-- Redis list for ready queue
-- PostgreSQL schema
-- Base handlers
+- Redis ready queue
+- PostgreSQL jobs table
 
-### Phase 2 — Scheduling + Retries
-- next_run_at
-- delayed jobs (Redis ZSET)
-- sweeper
-- exponential backoff
-- dead-letter support
+## Phase 2 — Scheduling + Retries
+- next_run_at column
+- delayed ZSET queue
+- sweeper loop
+- exponential retry backoff
+- dead-letter tracking
 
-### Phase 3 — Observability + Reliability
-- structured logging via Pino
-- Prometheus metrics (API + worker)
-- /metrics endpoints
-- worker metrics server
-- job counters + queue length gauge
-- stale job reaper script
-- GitHub Actions CI
-- deep health check
+## Phase 3 — Observability
+- Pino logging
+- Prometheus metrics
+- /metrics in API + worker
+- stale job reaper
+- GitHub Actions CI pipeline
+
+## Phase 4 — Control Layer (LATEST)
+### Idempotency
+- POST /jobs supports `idempotencyKey`
+- Prevents duplicate job creation
+- Unique partial index added
+
+### Cancellation
+- POST /jobs/:id/cancel
+- Only allowed if job not in_progress/succeeded/dead_letter
+- Removes from Redis queues
+
+### Pause / Resume Fleet
+- POST /control/pause
+- POST /control/resume
+- Workers check Redis key `queue:paused`
+
+### Worker Concurrency
+- WORKER_CONCURRENCY env var
+- Default: 4
+
+### Optimistic Claim
+- UPDATE ... WHERE status = 'pending'
+- Prevents multiple workers claiming same job
 
 ## Running Infra
 
@@ -79,9 +99,11 @@ cd packages/api
 npm run dev
 ```
 
-Available endpoints:
-
+**Endpoints**
 - POST /jobs
+- POST /jobs/:id/cancel
+- POST /control/pause
+- POST /control/resume
 - GET /jobs/:id
 - GET /health
 - GET /metrics
@@ -93,38 +115,64 @@ cd packages/worker
 npm run dev
 ```
 
-Metrics server: http://localhost:9100/metrics
+Metrics at:
+```
+http://localhost:9100/metrics
+```
 
-## Submit Job Example
+## Idempotent Job Example
 
-POST /jobs
 ```json
 {
   "type": "sendEmail",
-  "payload": { "to": "user@example.com" }
+  "payload": { "to": "user@example.com" },
+  "idempotencyKey": "email-123"
 }
 ```
 
-## Check Job Status
+## Cancel Job Example
 
-GET /jobs/<id>
+POST /jobs/:id/cancel → `{ "status": "cancelled" }`
 
-## Reaper
+## Pause / Resume
 
 ```
-cd packages/worker
-npm run reaper
+POST /control/pause
+POST /control/resume
 ```
+
+## Testing Checklist (Postman)
+1. Submit job with idempotencyKey, repeat — same ID returned.
+2. Cancel pending job — should be cancelled.
+3. Pause workers → submit jobs → queue grows.
+4. Resume workers → queue drains.
+5. Concurrency check with long-running jobs.
+6. Optimistic claim: two workers should never double-process.
 
 ## CI Pipeline
+GitHub Actions workflow:
 
-Located at:
 ```
 .github/workflows/ci.yml
 ```
 
-Runs:
-- install
-- typecheck
-- build
-- lint
+- install deps  
+- lint  
+- build  
+- typecheck  
+
+## Environment Variables
+
+```
+REDIS_HOST=redis
+REDIS_PORT=6379
+WORKER_CONCURRENCY=4
+SWEEP_INTERVAL_MS=1000
+DATABASE_URL=postgres://dev:dev@postgres:5432/jobs
+```
+
+## Next Step — Phase 5 UI Dashboard
+- React (Vite + Tailwind)
+- Real-time job feed
+- Pause/resume controls
+- Job explorer
