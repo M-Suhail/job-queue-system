@@ -17,3 +17,8 @@ ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS next_run_at TIMESTAMPTZ DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_jobs_next_run_at ON jobs(next_run_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_jobs_idempotency_key
+  ON jobs(idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
