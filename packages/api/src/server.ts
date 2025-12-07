@@ -157,4 +157,8 @@ app.get('/health', async (_req, res) => {
 });
 
 const port = parseInt(process.env.API_PORT || '3000', 10);
-app.listen(port, () => logger.info({ port }, 'API listening'));
+
+// Export redis client for graceful shutdown in tests
+export { redis };
+export default app;
+

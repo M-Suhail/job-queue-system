@@ -7,12 +7,25 @@
   "scripts": {
     "bootstrap": "npm install",
     "build": "npm run build -w @jobqueue/common && npm run build -w job-queue-api && npm run build -w job-queue-worker",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "test": "cross-env NODE_ENV=test jest --runInBand",
+    "test:unit": "cross-env NODE_ENV=test jest --testPathPatterns=tests/unit",
+    "test:integration": "cross-env NODE_ENV=test jest --testPathPatterns=tests/integration --runInBand --detectOpenHandles",
+    "test:watch": "cross-env NODE_ENV=test jest --watch"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
     "@types/pino": "^7.0.4",
-    "eslint": "^9.39.1"
+    "@types/supertest": "^6.0.3",
+    "cross-env": "^10.1.0",
+    "eslint": "^9.39.1",
+    "jest": "^30.2.0",
+    "reflect-metadata": "^0.2.2",
+    "supertest": "^7.1.4",
+    "testcontainers": "^11.9.0",
+    "ts-jest": "^29.4.6"
   },
   "dependencies": {
     "express-prom-bundle": "^8.0.0",

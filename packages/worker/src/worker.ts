@@ -5,6 +5,7 @@ import { query } from '@jobqueue/common/src/db';
 import { getHandler } from './handlers';
 import logger from '@jobqueue/common/src/logger';
 import { jobsProcessed, jobsFailed, jobsDeadLetter } from '@jobqueue/common/src/metrics';
+import { backoffSeconds } from './utils/backoff';
 
 dotenv.config();
 
@@ -20,14 +21,6 @@ const WORKER_ID = `worker-${Math.random().toString(36).slice(2, 8)}`;
 const WORKER_CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '4', 10);
 
 let inFlight = 0;
-
-function backoffSeconds(attempts: number) {
-  const base = 5;
-  const cap = 3600;
-  const secs = Math.min(cap, Math.pow(2, attempts) * base);
-  const jitter = secs * 0.1 * (Math.random() * 2 - 1);
-  return Math.max(1, Math.round(secs + jitter));
-}
 
 async function moveDueJobsToReady(limit = 100) {
   const nowMs = Date.now();
