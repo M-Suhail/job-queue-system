@@ -109,25 +109,20 @@ Runs:
 
 Tests:
 - job creation → DB + Redis
-- idempotency
-- cancellation
-- pause/resume
-- scheduling
-- optimistic claim validity
 
 ### Updated GitHub Actions Pipeline
 Runs:
 - install deps
 - build
-- typecheck
+- lint
 - unit tests
-- integration tests
+- integration tests (with Docker)
 
 ### Test Commands
-```
-npm test
-npm run test:unit
-npm run test:integration
+```bash
+npm run test:unit        # Run unit tests only
+npm run test:integration # Run integration tests (requires Docker)
+npm test                 # Run all tests
 ```
 
 # Running Infrastructure
@@ -136,9 +131,10 @@ docker compose -f infra/docker-compose.yml up -d
 ```
 
 # Running API
-```
+```bash
 cd packages/api
-npm run dev
+npm run dev    # Development with hot reload
+npm run start  # Production (requires build first)
 ```
 
 Endpoints:
@@ -151,7 +147,7 @@ Endpoints:
 - GET /metrics
 
 # Running Worker
-```
+```bash
 cd packages/worker
 npm run dev
 ```
@@ -218,4 +214,4 @@ DATABASE_URL=postgres://dev:dev@postgres:5432/jobs
 - queue explorer
 - dead-letter view
 - pause/resume controls
-``
+```
