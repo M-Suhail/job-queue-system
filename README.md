@@ -97,6 +97,7 @@ Located in:
 ```
 tests/unit/
 ```
+- `backoffSeconds` utility function tests
 
 ### Integration Tests (Testcontainers)
 ```
@@ -108,7 +109,13 @@ Runs:
 - API via supertest(server)
 
 Tests:
-- job creation → DB + Redis
+- **POST /jobs** - create job, validation errors, idempotency key
+- **GET /jobs/:id** - fetch job, 404 handling
+- **POST /jobs/:id/cancel** - cancel pending job, status validation
+- **POST /control/pause** - pause workers
+- **POST /control/resume** - resume workers
+- **GET /health** - health check
+- **GET /metrics** - Prometheus metrics
 
 ### Updated GitHub Actions Pipeline
 Runs:
