@@ -6,17 +6,29 @@ export const api = axios.create({ baseURL: base, timeout: 5000 })
 
 export interface JobFilters {
   limit?: number
+  offset?: number
   status?: string
   q?: string
 }
 
-export async function fetchJobs(filters: JobFilters = {}): Promise<Job[]> {
+export interface PaginatedResponse<T> {
+  data: T[]
+  pagination: {
+    total: number
+    limit: number
+    offset: number
+    hasMore: boolean
+  }
+}
+
+export async function fetchJobs(filters: JobFilters = {}): Promise<PaginatedResponse<Job>> {
   const params = new URLSearchParams()
   if (filters.limit) params.set('limit', String(filters.limit))
+  if (filters.offset) params.set('offset', String(filters.offset))
   if (filters.status) params.set('status', filters.status)
   if (filters.q) params.set('q', filters.q)
   
-  const resp = await api.get<Job[]>(`/jobs?${params.toString()}`)
+  const resp = await api.get<PaginatedResponse<Job>>(`/jobs?${params.toString()}`)
   return resp.data
 }
 

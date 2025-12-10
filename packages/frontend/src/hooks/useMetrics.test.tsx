@@ -48,7 +48,7 @@ describe('useMetrics', () => {
     expect(result.current.data).toEqual(mockMetrics)
   })
 
-  it('returns null on error', async () => {
+  it('returns error state on failure', async () => {
     vi.mocked(client.api.get).mockRejectedValueOnce(new Error('Failed'))
 
     const { result } = renderHook(() => useMetrics(), {
@@ -56,10 +56,9 @@ describe('useMetrics', () => {
     })
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
+      expect(result.current.isError).toBe(true)
     })
 
-    // The hook catches errors and returns null
-    expect(result.current.data).toBeNull()
+    expect(result.current.error).toBeInstanceOf(Error)
   })
 })

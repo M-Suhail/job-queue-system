@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useJobs } from './useJobs'
 import * as client from '../api/client'
-import { mockJobs } from '../test/mocks'
+import { mockPaginatedJobs } from '../test/mocks'
 
 vi.mock('../api/client', () => ({
   fetchJobs: vi.fn(),
@@ -33,7 +33,7 @@ describe('useJobs', () => {
   })
 
   it('returns jobs data on success', async () => {
-    vi.mocked(client.fetchJobs).mockResolvedValueOnce(mockJobs)
+    vi.mocked(client.fetchJobs).mockResolvedValueOnce(mockPaginatedJobs)
 
     const { result } = renderHook(() => useJobs(), {
       wrapper: createWrapper(),
@@ -45,8 +45,8 @@ describe('useJobs', () => {
       expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(result.current.data).toEqual(mockJobs)
-    expect(client.fetchJobs).toHaveBeenCalledWith({ limit: 50 })
+    expect(result.current.data).toEqual(mockPaginatedJobs)
+    expect(client.fetchJobs).toHaveBeenCalledWith({ limit: 20 })
   })
 
   it('handles loading state', () => {
@@ -77,7 +77,7 @@ describe('useJobs', () => {
   })
 
   it('provides queryClient instance', () => {
-    vi.mocked(client.fetchJobs).mockResolvedValueOnce(mockJobs)
+    vi.mocked(client.fetchJobs).mockResolvedValueOnce(mockPaginatedJobs)
 
     const { result } = renderHook(() => useJobs(), {
       wrapper: createWrapper(),

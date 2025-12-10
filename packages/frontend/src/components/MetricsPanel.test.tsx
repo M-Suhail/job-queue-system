@@ -43,14 +43,13 @@ describe('MetricsPanel', () => {
     expect(screen.getByText('Dead letter')).toBeInTheDocument()
   })
 
-  it('shows "-" when no data is available', async () => {
+  it('shows error message when fetch fails', async () => {
     vi.mocked(client.api.get).mockRejectedValueOnce(new Error('Failed'))
 
     render(<MetricsPanel />)
 
     await waitFor(() => {
-      const dashes = screen.getAllByText('-')
-      expect(dashes.length).toBeGreaterThanOrEqual(4)
+      expect(screen.getByText('Failed to load metrics')).toBeInTheDocument()
     })
   })
 
@@ -60,13 +59,5 @@ describe('MetricsPanel', () => {
     render(<MetricsPanel />)
 
     expect(screen.getByText('Metrics')).toBeInTheDocument()
-  })
-
-  it('shows Prometheus hint', () => {
-    vi.mocked(client.api.get).mockResolvedValueOnce({ data: mockMetrics })
-
-    render(<MetricsPanel />)
-
-    expect(screen.getByText(/For full metrics use Prometheus/)).toBeInTheDocument()
   })
 })

@@ -63,3 +63,13 @@ export const mockMetrics = {
   succeeded: 142,
   dead_letter: 2,
 }
+
+export const mockPaginatedJobs = {
+  data: mockJobs,
+  pagination: {
+    total: 4,
+    limit: 20,
+    offset: 0,
+    hasMore: false
+  }
+}

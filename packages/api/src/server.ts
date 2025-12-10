@@ -81,33 +81,48 @@ app.get('/jobs/:id', async (req, res) => {
   res.json(result.rows[0]);
 });
 
-// List jobs with optional limit and filters
+// List jobs with optional limit, offset and filters
 app.get('/jobs', async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 200);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
     const status = req.query.status as string | undefined;
     const search = req.query.q as string | undefined;
     
-    let sql = 'SELECT * FROM jobs WHERE 1=1';
+    let whereSql = 'WHERE 1=1';
     const params: any[] = [];
     let paramIndex = 1;
     
     if (status) {
-      sql += ` AND status = $${paramIndex++}`;
+      whereSql += ` AND status = $${paramIndex++}`;
       params.push(status);
     }
     
     if (search) {
-      sql += ` AND (id::text ILIKE $${paramIndex} OR type ILIKE $${paramIndex})`;
+      whereSql += ` AND (id::text ILIKE $${paramIndex} OR type ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
       paramIndex++;
     }
     
-    sql += ` ORDER BY created_at DESC LIMIT $${paramIndex}`;
-    params.push(limit);
+    // Get total count
+    const countResult = await query(`SELECT COUNT(*) as total FROM jobs ${whereSql}`, params);
+    const total = parseInt(countResult.rows[0].total);
     
-    const result = await query(sql, params);
-    res.json(result.rows);
+    // Get paginated results
+    const dataSql = `SELECT * FROM jobs ${whereSql} ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
+    params.push(limit, offset);
+    
+    const result = await query(dataSql, params);
+    
+    res.json({
+      data: result.rows,
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + result.rows.length < total
+      }
+    });
   } catch (err: any) {
     logger.error({ err }, 'list jobs error');
     res.status(500).json({ error: 'internal' });

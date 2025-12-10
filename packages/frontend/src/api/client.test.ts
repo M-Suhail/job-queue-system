@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import axios from 'axios'
 import { fetchJobs, fetchJob, createJob, cancelJob, pauseQueue, resumeQueue } from './client'
-import { mockJob, mockJobs } from '../test/mocks'
+import { mockJob, mockJobs, mockPaginatedJobs } from '../test/mocks'
 
 vi.mock('axios', () => {
   const mockAxiosInstance = {
@@ -25,21 +25,27 @@ describe('API Client', () => {
 
   describe('fetchJobs', () => {
     it('fetches jobs with default (empty) filters', async () => {
-      mockApi.get.mockResolvedValueOnce({ data: mockJobs })
+      mockApi.get.mockResolvedValueOnce({ data: mockPaginatedJobs })
 
       const result = await fetchJobs()
 
       expect(mockApi.get).toHaveBeenCalledWith('/jobs?')
-      expect(result).toEqual(mockJobs)
+      expect(result.data).toEqual(mockJobs)
+      expect(result.pagination.total).toBe(4)
     })
 
-    it('fetches jobs with custom limit', async () => {
-      mockApi.get.mockResolvedValueOnce({ data: mockJobs.slice(0, 2) })
+    it('fetches jobs with custom limit and offset', async () => {
+      const paginatedResponse = {
+        data: mockJobs.slice(0, 2),
+        pagination: { total: 4, limit: 2, offset: 0, hasMore: true }
+      }
+      mockApi.get.mockResolvedValueOnce({ data: paginatedResponse })
 
-      const result = await fetchJobs({ limit: 2 })
+      const result = await fetchJobs({ limit: 2, offset: 0 })
 
       expect(mockApi.get).toHaveBeenCalledWith('/jobs?limit=2')
-      expect(result).toHaveLength(2)
+      expect(result.data).toHaveLength(2)
+      expect(result.pagination.hasMore).toBe(true)
     })
 
     it('throws on error', async () => {
