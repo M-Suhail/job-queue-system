@@ -14,6 +14,21 @@ const redis = new Redis({
   port: parseInt(process.env.REDIS_PORT || '6379', 10)
 });
 
+// Separate Redis client for publishing events (cannot use same connection for pub/sub)
+const redisPub = new Redis({
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379', 10)
+});
+
+// Helper to publish job events
+async function publishJobEvent(type: string, job: any) {
+  try {
+    await redisPub.publish('jobs:events', JSON.stringify({ type, job }));
+  } catch (err) {
+    logger.error({ err }, 'failed to publish job event');
+  }
+}
+
 const READY_QUEUE = 'queue:jobs';
 const DELAYED_ZSET = 'delayed:jobs';
 const SWEEP_INTERVAL_MS = Number(process.env.SWEEP_INTERVAL_MS || 1000);
@@ -75,6 +90,11 @@ async function processJobId(jobId: string) {
     }
 
     const claimedJob = claim.rows[0];
+    
+    // Publish in_progress event
+    const inProgressJob = await query('SELECT * FROM jobs WHERE id=$1', [jobId]);
+    if (inProgressJob.rows[0]) publishJobEvent('job_updated', inProgressJob.rows[0]);
+    
     const handler = getHandler(claimedJob.type);
 
     if (!handler) {
@@ -82,6 +102,9 @@ async function processJobId(jobId: string) {
       logger.error({ jobId, errMsg }, 'handler missing; moving to dead_letter');
       await query('UPDATE jobs SET status=$1, last_error=$2, updated_at=now() WHERE id=$3', ['dead_letter', errMsg, jobId]);
       jobsDeadLetter.inc();
+      // Publish dead_letter event
+      const updatedJob = await query('SELECT * FROM jobs WHERE id=$1', [jobId]);
+      if (updatedJob.rows[0]) publishJobEvent('job_updated', updatedJob.rows[0]);
       return;
     }
 
@@ -94,6 +117,9 @@ async function processJobId(jobId: string) {
       await query('UPDATE jobs SET status=$1, attempts=$2, updated_at=now() WHERE id=$3', ['succeeded', (claimedJob.attempts || 0) + 1, jobId]);
       jobsProcessed.inc();
       logger.info({ workerId: WORKER_ID, jobId }, 'job succeeded');
+      // Publish success event
+      const succeededJob = await query('SELECT * FROM jobs WHERE id=$1', [jobId]);
+      if (succeededJob.rows[0]) publishJobEvent('job_updated', succeededJob.rows[0]);
     } catch (err:any) {
       const attempts = (claimedJob.attempts || 0) + 1;
       const errMsg = err?.message ?? String(err);
@@ -104,6 +130,9 @@ async function processJobId(jobId: string) {
         await query('UPDATE jobs SET status=$1, attempts=$2, last_error=$3, updated_at=now() WHERE id=$4', ['dead_letter', attempts, errMsg, jobId]);
         jobsDeadLetter.inc();
         logger.warn({ workerId: WORKER_ID, jobId }, 'moved to dead_letter');
+        // Publish dead_letter event
+        const deadJob = await query('SELECT * FROM jobs WHERE id=$1', [jobId]);
+        if (deadJob.rows[0]) publishJobEvent('job_updated', deadJob.rows[0]);
       } else {
         const delaySec = backoffSeconds(attempts);
         const nextRun = new Date(Date.now() + delaySec * 1000).toISOString();
@@ -113,6 +142,9 @@ async function processJobId(jobId: string) {
         );
         await redis.zadd(DELAYED_ZSET, Date.now() + delaySec * 1000, jobId);
         logger.info({ workerId: WORKER_ID, jobId, attempts, delaySec, nextRun }, 'requeued with backoff');
+        // Publish failed event
+        const failedJob = await query('SELECT * FROM jobs WHERE id=$1', [jobId]);
+        if (failedJob.rows[0]) publishJobEvent('job_updated', failedJob.rows[0]);
       }
     }
   } finally {

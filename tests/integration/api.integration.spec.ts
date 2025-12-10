@@ -357,6 +357,129 @@ describe('GET /health', () => {
   });
 });
 
+describe('GET /jobs (list)', () => {
+  beforeEach(async () => {
+    await clearQueue();
+    // Clean up existing jobs
+    await pool.query('DELETE FROM jobs');
+  });
+
+  test('returns empty list when no jobs', async () => {
+    const resp = await request
+      .get('/jobs')
+      .expect(200);
+
+    expect(resp.body).toHaveProperty('data');
+    expect(resp.body).toHaveProperty('pagination');
+    expect(resp.body.data).toEqual([]);
+    expect(resp.body.pagination.total).toBe(0);
+  });
+
+  test('returns jobs with pagination metadata', async () => {
+    // Create some jobs
+    await request.post('/jobs').send({ type: 'email', payload: { to: 'a@test.com' } });
+    await request.post('/jobs').send({ type: 'sms', payload: { to: 'b@test.com' } });
+    await request.post('/jobs').send({ type: 'webhook', payload: { url: 'test.com' } });
+
+    const resp = await request
+      .get('/jobs')
+      .expect(200);
+
+    expect(resp.body.data).toHaveLength(3);
+    expect(resp.body.pagination.total).toBe(3);
+    expect(resp.body.pagination).toHaveProperty('limit');
+    expect(resp.body.pagination).toHaveProperty('offset');
+    expect(resp.body.pagination).toHaveProperty('hasMore');
+  });
+
+  test('supports limit and offset pagination', async () => {
+    // Create 5 jobs
+    for (let i = 0; i < 5; i++) {
+      await request.post('/jobs').send({ type: `job-${i}`, payload: { index: i } });
+    }
+
+    const resp = await request
+      .get('/jobs?limit=2&offset=2')
+      .expect(200);
+
+    expect(resp.body.data).toHaveLength(2);
+    expect(resp.body.pagination.total).toBe(5);
+    expect(resp.body.pagination.limit).toBe(2);
+    expect(resp.body.pagination.offset).toBe(2);
+  });
+
+  test('filters by status', async () => {
+    // Create jobs with different statuses
+    const createResp = await request.post('/jobs').send({ type: 'pending-job', payload: {} });
+    const jobId = createResp.body.id;
+    
+    // Manually set one to succeeded
+    await pool.query('UPDATE jobs SET status=$1 WHERE id=$2', ['succeeded', jobId]);
+
+    // Create another pending job
+    await request.post('/jobs').send({ type: 'another-pending', payload: {} });
+
+    const resp = await request
+      .get('/jobs?status=succeeded')
+      .expect(200);
+
+    expect(resp.body.data).toHaveLength(1);
+    expect(resp.body.data[0].status).toBe('succeeded');
+  });
+
+  test('filters by search query', async () => {
+    await request.post('/jobs').send({ type: 'sendEmail', payload: { to: 'search@test.com' } });
+    await request.post('/jobs').send({ type: 'webhook', payload: { url: 'other.com' } });
+
+    const resp = await request
+      .get('/jobs?q=email')
+      .expect(200);
+
+    expect(resp.body.data.length).toBeGreaterThanOrEqual(1);
+    expect(resp.body.data.some((j: any) => j.type.includes('Email'))).toBe(true);
+  });
+});
+
+describe('GET /stats', () => {
+  beforeEach(async () => {
+    await clearQueue();
+    await pool.query('DELETE FROM jobs');
+  });
+
+  test('returns queue statistics', async () => {
+    // Create jobs with different statuses
+    await request.post('/jobs').send({ type: 'pending-1', payload: {} });
+    await request.post('/jobs').send({ type: 'pending-2', payload: {} });
+
+    const resp = await request
+      .get('/stats')
+      .expect(200);
+
+    expect(resp.body).toHaveProperty('pending');
+    expect(resp.body).toHaveProperty('in_progress');
+    expect(resp.body).toHaveProperty('succeeded');
+    expect(resp.body).toHaveProperty('failed');
+    expect(resp.body).toHaveProperty('dead_letter');
+    expect(resp.body).toHaveProperty('cancelled');
+    expect(resp.body.pending).toBe(2);
+  });
+
+  test('returns correct counts for different statuses', async () => {
+    // Create and manipulate jobs
+    const resp1 = await request.post('/jobs').send({ type: 'job-1', payload: {} });
+    const resp2 = await request.post('/jobs').send({ type: 'job-2', payload: {} });
+    
+    // Set different statuses
+    await pool.query('UPDATE jobs SET status=$1 WHERE id=$2', ['succeeded', resp1.body.id]);
+    await pool.query('UPDATE jobs SET status=$1 WHERE id=$2', ['failed', resp2.body.id]);
+
+    const stats = await request.get('/stats').expect(200);
+
+    expect(stats.body.succeeded).toBe(1);
+    expect(stats.body.failed).toBe(1);
+  });
+});
+
 describe('GET /metrics', () => {
   test('returns Prometheus metrics', async () => {
     const resp = await request

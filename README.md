@@ -10,8 +10,9 @@ A fully functioning distributed job queue built with:
 - Prometheus (metrics)
 - Docker
 - GitHub Actions CI
-- Jest + Testcontainers (Phase 5)
-- React + Vite + Tailwind CSS (Phase 6)
+- Jest + Testcontainers (Integration Tests)
+- React + Vite + Tailwind CSS (UI Dashboard)
+- Socket.IO + Redis Pub/Sub (Real-time Events)
 
 Supports:
 - background job processing
@@ -22,12 +23,13 @@ Supports:
 - metrics for monitoring
 - structured JSON logging
 - stale job reaper
-- pause/resume workers (Phase 4)
-- job cancellation (Phase 4)
-- idempotency keys to prevent duplicates (Phase 4)
-- optimistic job claiming + concurrency (Phase 4)
-- automated unit + integration tests (Phase 5)
-- real-time UI dashboard (Phase 6)
+- pause/resume workers
+- job cancellation
+- idempotency keys to prevent duplicates
+- optimistic job claiming + concurrency
+- automated unit + integration tests
+- real-time UI dashboard with Socket.IO
+- pagination for job lists
 
 ## Repository Structure
 
@@ -92,8 +94,8 @@ job-queue/
 - UPDATE ... WHERE status='pending'
 - guarantees single-claim behavior
 
-# Phase 5 — Automated Testing (NEW)
-Full testing suite added:
+# Phase 5 — Automated Testing
+Full testing suite:
 
 ### Unit Tests (Jest + ts-jest)
 Located in:
@@ -102,7 +104,7 @@ tests/unit/
 ```
 - `backoffSeconds` utility function tests
 
-### Integration Tests (Testcontainers)
+### Integration Tests (Jest + Testcontainers)
 ```
 tests/integration/
 ```
@@ -113,12 +115,20 @@ Runs:
 
 Tests:
 - **POST /jobs** - create job, validation errors, idempotency key
+- **GET /jobs** - list jobs with pagination, filtering, search
 - **GET /jobs/:id** - fetch job, 404 handling
 - **POST /jobs/:id/cancel** - cancel pending job, status validation
 - **POST /control/pause** - pause workers
 - **POST /control/resume** - resume workers
+- **GET /stats** - queue statistics
 - **GET /health** - health check
 - **GET /metrics** - Prometheus metrics
+
+### Frontend Tests (Vitest + Testing Library)
+```
+packages/frontend/src/**/*.test.{ts,tsx}
+```
+- 86 tests covering components, hooks, API client, sockets
 
 ### Updated GitHub Actions Pipeline
 Runs:
@@ -126,6 +136,7 @@ Runs:
 - build
 - lint
 - unit tests
+- frontend tests
 - integration tests (with Docker)
 
 ### Test Commands
@@ -136,7 +147,7 @@ npm run test:integration # Run integration tests (requires Docker)
 npm test                 # Run all tests
 ```
 
-# Phase 6 — UI Dashboard (NEW)
+# Phase 6 — UI Dashboard
 Full React dashboard for job queue management:
 
 ### Tech Stack
@@ -144,8 +155,8 @@ Full React dashboard for job queue management:
 - Vite 7 (build tool)
 - Tailwind CSS v4
 - TanStack Query v5 (data fetching)
-- Socket.io (real-time updates)
-- Vitest + Testing Library (77 tests)
+- Socket.IO (real-time updates)
+- Vitest + Testing Library (86 tests)
 
 ### Features
 - **Dashboard** - Overview of all jobs with real-time updates
@@ -154,7 +165,17 @@ Full React dashboard for job queue management:
 - **Job Details** - View payload, attempts, errors, cancel jobs
 - **Metrics Panel** - Queue depth, in-progress, succeeded, failed counts
 - **Controls** - Pause/Resume queue processing
-- **Real-time** - Socket.io integration for live job updates
+- **Real-time** - Socket.IO integration with Redis pub/sub for live job updates
+- **Pagination** - Navigate through large job lists with page controls
+
+### Socket.IO Events
+The API emits the following real-time events via Socket.IO:
+- `job_created` - When a new job is created
+- `job_updated` - When a job status changes (in_progress, succeeded, failed, dead_letter)
+- `queue_paused` - When the queue is paused
+- `queue_resumed` - When the queue is resumed
+
+Worker events flow through Redis pub/sub (`jobs:events` channel) to the API, which broadcasts to connected clients.
 
 ### Running Frontend
 ```bash
@@ -185,11 +206,12 @@ Endpoints:
 - POST /jobs/:id/cancel
 - POST /control/pause
 - POST /control/resume
-- GET /jobs (with filters: status, q, limit)
+- GET /jobs (with filters: status, q, limit, offset)
 - GET /jobs/:id
 - GET /stats (dashboard metrics)
 - GET /health
 - GET /metrics
+- WebSocket: Socket.IO at /socket.io
 
 # Running Worker
 ```bash
@@ -238,11 +260,16 @@ POST /control/resume
 .github/workflows/ci.yml
 ```
 
-Runs:
-- lint
-- typecheck
-- build
-- unit + integration tests
+Runs on push/PR to main:
+1. **Build & Test Job:**
+   - build (includes TypeScript compilation)
+   - lint
+   - unit tests
+   - frontend tests (86 Vitest tests)
+
+2. **Integration Tests Job:**
+   - build
+   - integration tests (with Docker containers)
 
 # Environment Variables
 ```
@@ -261,11 +288,11 @@ The main dashboard shows:
 - Tabs for All Jobs / Dead Letter queue
 - Search and status filters
 - Real-time job list with status pills
+- Pagination controls
 - Job details panel
 - Metrics panel with queue statistics
 - Pause/Resume controls
 
 ---
 
-**Phase 6 Complete** ✓
-```
+**Complete** ✓

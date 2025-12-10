@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { query } from '@jobqueue/common/src/db';
 import { logger } from '@jobqueue/common/src/logger';
 import { jobsSubmitted, register as metricsRegister, queueLengthGauge } from '@jobqueue/common/src/metrics';
+import { emitJobCreated, emitJobUpdated } from './socket';
 
 dotenv.config();
 
@@ -12,6 +13,12 @@ const app = express();
 app.use(express.json());
 
 const redis = new Redis({
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379', 10)
+});
+
+// Redis publisher for events (workers subscribe to this)
+const redisPub = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: parseInt(process.env.REDIS_PORT || '6379', 10)
 });
@@ -51,6 +58,12 @@ app.post('/jobs', async (req, res) => {
 
     jobsSubmitted.inc();
     logger.info({ jobId: id, type, idempotencyKey }, 'job created');
+
+    // Fetch full job and emit event
+    const jobResult = await query('SELECT * FROM jobs WHERE id=$1', [id]);
+    if (jobResult.rows.length > 0) {
+      emitJobCreated(jobResult.rows[0]);
+    }
 
     return res.status(201).json({ id });
   } catch (err:any) {
@@ -147,6 +160,13 @@ app.post('/jobs/:id/cancel', async (req, res) => {
     await query('UPDATE jobs SET status=$1, updated_at=now() WHERE id=$2', ['cancelled', id]);
 
     logger.info({ jobId: id }, 'job cancelled');
+    
+    // Emit job_updated event
+    const jobResult = await query('SELECT * FROM jobs WHERE id=$1', [id]);
+    if (jobResult.rows.length > 0) {
+      emitJobUpdated(jobResult.rows[0]);
+    }
+    
     return res.status(200).json({ id, status: 'cancelled' });
   } catch (err:any) {
     logger.error({ err, jobId: id }, 'cancel job error');
@@ -159,6 +179,8 @@ app.post('/control/pause', async (_req, res) => {
   try {
     await redis.set('queue:paused', '1');
     logger.info('queue paused via API');
+    // Publish event for any listeners
+    await redisPub.publish('jobs:events', JSON.stringify({ type: 'queue_paused' }));
     res.json({ paused: true });
   } catch (err:any) {
     logger.error({ err }, 'pause failed');
@@ -171,6 +193,8 @@ app.post('/control/resume', async (_req, res) => {
   try {
     await redis.del('queue:paused');
     logger.info('queue resumed via API');
+    // Publish event for any listeners
+    await redisPub.publish('jobs:events', JSON.stringify({ type: 'queue_resumed' }));
     res.json({ paused: false });
   } catch (err:any) {
     logger.error({ err }, 'resume failed');
