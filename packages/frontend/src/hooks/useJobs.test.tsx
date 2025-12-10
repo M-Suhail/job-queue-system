@@ -46,7 +46,7 @@ describe('useJobs', () => {
     })
 
     expect(result.current.data).toEqual(mockJobs)
-    expect(client.fetchJobs).toHaveBeenCalledWith(50)
+    expect(client.fetchJobs).toHaveBeenCalledWith({ limit: 50 })
   })
 
   it('handles loading state', () => {

@@ -24,19 +24,19 @@ describe('API Client', () => {
   })
 
   describe('fetchJobs', () => {
-    it('fetches jobs with default limit', async () => {
+    it('fetches jobs with default (empty) filters', async () => {
       mockApi.get.mockResolvedValueOnce({ data: mockJobs })
 
       const result = await fetchJobs()
 
-      expect(mockApi.get).toHaveBeenCalledWith('/jobs?limit=50')
+      expect(mockApi.get).toHaveBeenCalledWith('/jobs?')
       expect(result).toEqual(mockJobs)
     })
 
     it('fetches jobs with custom limit', async () => {
       mockApi.get.mockResolvedValueOnce({ data: mockJobs.slice(0, 2) })
 
-      const result = await fetchJobs(2)
+      const result = await fetchJobs({ limit: 2 })
 
       expect(mockApi.get).toHaveBeenCalledWith('/jobs?limit=2')
       expect(result).toHaveLength(2)
