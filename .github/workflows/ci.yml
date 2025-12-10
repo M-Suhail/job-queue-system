@@ -31,6 +31,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      - name: Run frontend tests
+        run: npm run test:frontend
+
   integration-tests:
     runs-on: ubuntu-latest
     needs: build-and-test

@@ -81,6 +81,39 @@ app.get('/jobs/:id', async (req, res) => {
   res.json(result.rows[0]);
 });
 
+// List jobs with optional limit and filters
+app.get('/jobs', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const status = req.query.status as string | undefined;
+    const search = req.query.q as string | undefined;
+    
+    let sql = 'SELECT * FROM jobs WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+    
+    if (status) {
+      sql += ` AND status = $${paramIndex++}`;
+      params.push(status);
+    }
+    
+    if (search) {
+      sql += ` AND (id::text ILIKE $${paramIndex} OR type ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    sql += ` ORDER BY created_at DESC LIMIT $${paramIndex}`;
+    params.push(limit);
+    
+    const result = await query(sql, params);
+    res.json(result.rows);
+  } catch (err: any) {
+    logger.error({ err }, 'list jobs error');
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // Cancel a job if not in_progress/succeeded/dead_letter
 app.post('/jobs/:id/cancel', async (req, res) => {
   const { id } = req.params;
@@ -126,6 +159,36 @@ app.post('/control/resume', async (_req, res) => {
     res.json({ paused: false });
   } catch (err:any) {
     logger.error({ err }, 'resume failed');
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Dashboard stats endpoint (JSON format for frontend)
+app.get('/stats', async (_req, res) => {
+  try {
+    const queueDepth = await redis.llen('queue:jobs');
+    
+    const statsResult = await query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+        COUNT(*) FILTER (WHERE status = 'succeeded') as succeeded,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed,
+        COUNT(*) FILTER (WHERE status = 'dead_letter') as dead_letter,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending
+      FROM jobs
+    `);
+    
+    const stats = statsResult.rows[0] || {};
+    res.json({
+      queue_depth: queueDepth,
+      in_progress: parseInt(stats.in_progress) || 0,
+      succeeded: parseInt(stats.succeeded) || 0,
+      failed: parseInt(stats.failed) || 0,
+      dead_letter: parseInt(stats.dead_letter) || 0,
+      pending: parseInt(stats.pending) || 0,
+    });
+  } catch (err: any) {
+    logger.error({ err }, 'stats error');
     res.status(500).json({ error: 'internal' });
   }
 });

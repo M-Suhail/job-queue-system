@@ -1,4 +1,4 @@
-# Job Queue System (API + Worker + Scheduling + Retries + Metrics + Logging + Phase 5 Testing Suite)
+# Job Queue System (API + Worker + Scheduling + Retries + Metrics + Logging + Testing + UI Dashboard)
 
 A fully functioning distributed job queue built with:
 
@@ -11,6 +11,7 @@ A fully functioning distributed job queue built with:
 - Docker
 - GitHub Actions CI
 - Jest + Testcontainers (Phase 5)
+- React + Vite + Tailwind CSS (Phase 6)
 
 Supports:
 - background job processing
@@ -26,6 +27,7 @@ Supports:
 - idempotency keys to prevent duplicates (Phase 4)
 - optimistic job claiming + concurrency (Phase 4)
 - automated unit + integration tests (Phase 5)
+- real-time UI dashboard (Phase 6)
 
 ## Repository Structure
 
@@ -35,6 +37,7 @@ job-queue/
     common/
     api/
     worker/
+    frontend/
   infra/
     docker-compose.yml
     init.sql
@@ -128,9 +131,42 @@ Runs:
 ### Test Commands
 ```bash
 npm run test:unit        # Run unit tests only
+npm run test:frontend    # Run frontend tests (Vitest)
 npm run test:integration # Run integration tests (requires Docker)
 npm test                 # Run all tests
 ```
+
+# Phase 6 — UI Dashboard (NEW)
+Full React dashboard for job queue management:
+
+### Tech Stack
+- React 19 + TypeScript
+- Vite 7 (build tool)
+- Tailwind CSS v4
+- TanStack Query v5 (data fetching)
+- Socket.io (real-time updates)
+- Vitest + Testing Library (77 tests)
+
+### Features
+- **Dashboard** - Overview of all jobs with real-time updates
+- **Job List** - Paginated list with status filters and search
+- **Dead Letter Queue** - Dedicated tab for failed jobs
+- **Job Details** - View payload, attempts, errors, cancel jobs
+- **Metrics Panel** - Queue depth, in-progress, succeeded, failed counts
+- **Controls** - Pause/Resume queue processing
+- **Real-time** - Socket.io integration for live job updates
+
+### Running Frontend
+```bash
+cd packages/frontend
+npm run dev      # Development server (http://localhost:5173)
+npm run build    # Production build
+npm run test     # Run Vitest tests
+npm run preview  # Preview production build
+```
+
+### API Proxy
+The frontend proxies `/api` requests to the backend at `localhost:3000`.
 
 # Running Infrastructure
 ```
@@ -149,7 +185,9 @@ Endpoints:
 - POST /jobs/:id/cancel
 - POST /control/pause
 - POST /control/resume
+- GET /jobs (with filters: status, q, limit)
 - GET /jobs/:id
+- GET /stats (dashboard metrics)
 - GET /health
 - GET /metrics
 
@@ -213,12 +251,21 @@ REDIS_PORT=6379
 WORKER_CONCURRENCY=4
 SWEEP_INTERVAL_MS=1000
 DATABASE_URL=postgres://dev:dev@postgres:5432/jobs
+VITE_API_URL=http://localhost:3000  # Frontend only (optional)
 ```
 
-# Next Step — Phase 6 UI Dashboard
-- React (Vite + Tailwind)
-- real-time job stream
-- queue explorer
-- dead-letter view
-- pause/resume controls
+# Screenshots
+
+## Dashboard
+The main dashboard shows:
+- Tabs for All Jobs / Dead Letter queue
+- Search and status filters
+- Real-time job list with status pills
+- Job details panel
+- Metrics panel with queue statistics
+- Pause/Resume controls
+
+---
+
+**Phase 6 Complete** ✓
 ```
