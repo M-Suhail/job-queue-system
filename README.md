@@ -1,298 +1,449 @@
-# Job Queue System (API + Worker + Scheduling + Retries + Metrics + Logging + Testing + UI Dashboard)
+# Job Queue System
 
-A fully functioning distributed job queue built with:
+A production-ready distributed job queue built with Node.js, TypeScript, PostgreSQL, Redis, and React.
 
-- Node.js (TypeScript)
-- Express
-- PostgreSQL
-- Redis
-- Pino (structured logging)
-- Prometheus (metrics)
-- Docker
-- GitHub Actions CI
-- Jest + Testcontainers (Integration Tests)
-- React + Vite + Tailwind CSS (UI Dashboard)
-- Socket.IO + Redis Pub/Sub (Real-time Events)
+![Build Status](https://github.com/M-Suhail/job-queue-system/actions/workflows/ci.yml/badge.svg)
 
-Supports:
-- background job processing
-- retries with exponential backoff
-- delayed jobs with scheduling
-- dead-letter queue
-- worker auto-scaling support
-- metrics for monitoring
-- structured JSON logging
-- stale job reaper
-- pause/resume workers
-- job cancellation
-- idempotency keys to prevent duplicates
-- optimistic job claiming + concurrency
-- automated unit + integration tests
-- real-time UI dashboard with Socket.IO
-- pagination for job lists
+## Features
 
-## Repository Structure
+- ⚡ **High Performance** - Redis-backed queue with PostgreSQL persistence
+- 🔢 **Priority Queues** - Jobs processed by priority (1-10, higher first)
+- ⏱️ **Job Timeouts** - Configurable execution timeouts (1s-1h)
+- 🔄 **Retries & Backoff** - Exponential backoff with configurable max attempts
+- ⏰ **Delayed Jobs** - Schedule jobs for future execution
+- 💀 **Dead Letter Queue** - Failed jobs moved to DLQ after max retries
+- 👷 **Worker Fleet Monitoring** - Track active workers, their status, and metrics
+- 📊 **Real-time Dashboard** - React UI with Socket.IO live updates
+- 📈 **Monitoring** - Prometheus metrics + Grafana dashboard
+- 🔒 **Security** - Rate limiting, input validation, API key auth
+- 📝 **API Documentation** - Interactive Swagger UI
+- 🧪 **Tested** - Unit, integration, and E2E tests
+- 🐳 **Docker Ready** - Production Docker Compose included
 
-```
-job-queue/
-  packages/
-    common/
-    api/
-    worker/
-    frontend/
-  infra/
-    docker-compose.yml
-    init.sql
-  tests/
-    unit/
-    integration/
-  .github/
-    workflows/
-      ci.yml
-  README.md
-```
+## Quick Start
 
-# Phase 1 — Core Queue
-- API to create jobs
-- Worker consumes jobs
-- Redis ready queue
-- PostgreSQL jobs table
+### Prerequisites
 
-# Phase 2 — Scheduling + Retries
-- next_run_at column
-- delayed ZSET queue
-- sweeper loop
-- exponential retry backoff
-- dead-letter logic
+- Node.js 20+
+- Docker & Docker Compose
+- npm 10+
 
-# Phase 3 — Observability
-- Pino JSON logging
-- Prometheus metrics
-- worker stale-job reaper
-- GitHub Actions CI (build + lint + typecheck)
+### Development Setup
 
-# Phase 4 — Control Layer
-### Idempotency
-- POST /jobs supports idempotencyKey
-- unique partial index prevents duplicates
-
-### Cancellation
-- POST /jobs/:id/cancel
-- only allowed when safe
-- removes job from Redis queues
-
-### Pause / Resume Workers
-- POST /control/pause
-- POST /control/resume
-- workers read Redis flag queue:paused
-
-### Worker Concurrency
-- WORKER_CONCURRENCY env
-- default: 4
-
-### Optimistic Claim
-- UPDATE ... WHERE status='pending'
-- guarantees single-claim behavior
-
-# Phase 5 — Automated Testing
-Full testing suite:
-
-### Unit Tests (Jest + ts-jest)
-Located in:
-```
-tests/unit/
-```
-- `backoffSeconds` utility function tests
-
-### Integration Tests (Jest + Testcontainers)
-```
-tests/integration/
-```
-Runs:
-- Postgres container
-- Redis container
-- API via supertest(server)
-
-Tests:
-- **POST /jobs** - create job, validation errors, idempotency key
-- **GET /jobs** - list jobs with pagination, filtering, search
-- **GET /jobs/:id** - fetch job, 404 handling
-- **POST /jobs/:id/cancel** - cancel pending job, status validation
-- **POST /control/pause** - pause workers
-- **POST /control/resume** - resume workers
-- **GET /stats** - queue statistics
-- **GET /health** - health check
-- **GET /metrics** - Prometheus metrics
-
-### Frontend Tests (Vitest + Testing Library)
-```
-packages/frontend/src/**/*.test.{ts,tsx}
-```
-- 86 tests covering components, hooks, API client, sockets
-
-### Updated GitHub Actions Pipeline
-Runs:
-- install deps
-- build
-- lint
-- unit tests
-- frontend tests
-- integration tests (with Docker)
-
-### Test Commands
 ```bash
-npm run test:unit        # Run unit tests only
-npm run test:frontend    # Run frontend tests (Vitest)
-npm run test:integration # Run integration tests (requires Docker)
-npm test                 # Run all tests
-```
+# Clone the repository
+git clone https://github.com/M-Suhail/job-queue-system.git
+cd job-queue-system
 
-# Phase 6 — UI Dashboard
-Full React dashboard for job queue management:
+# Install dependencies
+npm install
 
-### Tech Stack
-- React 19 + TypeScript
-- Vite 7 (build tool)
-- Tailwind CSS v4
-- TanStack Query v5 (data fetching)
-- Socket.IO (real-time updates)
-- Vitest + Testing Library (86 tests)
-
-### Features
-- **Dashboard** - Overview of all jobs with real-time updates
-- **Job List** - Paginated list with status filters and search
-- **Dead Letter Queue** - Dedicated tab for failed jobs
-- **Job Details** - View payload, attempts, errors, cancel jobs
-- **Metrics Panel** - Queue depth, in-progress, succeeded, failed counts
-- **Controls** - Pause/Resume queue processing
-- **Real-time** - Socket.IO integration with Redis pub/sub for live job updates
-- **Pagination** - Navigate through large job lists with page controls
-
-### Socket.IO Events
-The API emits the following real-time events via Socket.IO:
-- `job_created` - When a new job is created
-- `job_updated` - When a job status changes (in_progress, succeeded, failed, dead_letter)
-- `queue_paused` - When the queue is paused
-- `queue_resumed` - When the queue is resumed
-
-Worker events flow through Redis pub/sub (`jobs:events` channel) to the API, which broadcasts to connected clients.
-
-### Running Frontend
-```bash
-cd packages/frontend
-npm run dev      # Development server (http://localhost:5173)
-npm run build    # Production build
-npm run test     # Run Vitest tests
-npm run preview  # Preview production build
-```
-
-### API Proxy
-The frontend proxies `/api` requests to the backend at `localhost:3000`.
-
-# Running Infrastructure
-```
+# Start infrastructure (PostgreSQL + Redis)
 docker compose -f infra/docker-compose.yml up -d
+
+# Start API server
+cd packages/api && npm run dev
+
+# Start worker (in another terminal)
+cd packages/worker && npm run dev
+
+# Start frontend (in another terminal)
+cd packages/frontend && npm run dev
 ```
 
-# Running API
+### Access Points
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Frontend | http://localhost:5173 | React Dashboard |
+| API | http://localhost:3000 | REST API |
+| Swagger | http://localhost:3000/api-docs | API Documentation |
+| Metrics | http://localhost:3000/metrics | Prometheus metrics |
+| Health | http://localhost:3000/health | Health check |
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Frontend  │────▶│     API     │────▶│  PostgreSQL │
+│   (React)   │◀────│  (Express)  │◀────│   (Jobs)    │
+└─────────────┘     └──────┬──────┘     └─────────────┘
+       │                   │
+       │ Socket.IO         │ Redis Pub/Sub
+       ▼                   ▼
+┌─────────────┐     ┌─────────────┐
+│   Browser   │     │    Redis    │
+│  (Live UI)  │     │   (Queue)   │
+└─────────────┘     └──────┬──────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │   Workers   │
+                    │ (Consumers) │
+                    └─────────────┘
+```
+
+## API Endpoints
+
+### Jobs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/jobs` | Create a new job |
+| `GET` | `/jobs` | List jobs (with filters & pagination) |
+| `GET` | `/jobs/:id` | Get job details |
+| `POST` | `/jobs/:id/cancel` | Cancel a pending job |
+| `POST` | `/jobs/:id/retry` | Retry a failed/dead_letter job |
+| `DELETE` | `/jobs/:id` | Delete a job (requires API key) |
+
+### Control (requires API key)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/control/pause` | Pause all workers |
+| `POST` | `/control/resume` | Resume all workers |
+
+### Monitoring
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/stats` | Queue statistics (JSON) |
+| `GET` | `/workers` | List active workers |
+| `DELETE` | `/workers/:id` | Remove offline worker (requires API key) |
+| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/health` | Health check (DB + Redis) |
+
+### Job Creation Request Body
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `type` | string | Yes | - | Job type identifier (1-100 chars) |
+| `payload` | object | No | `{}` | Job data to process |
+| `idempotencyKey` | UUID | No | - | Prevents duplicate job creation |
+| `maxAttempts` | number | No | 5 | Max retries before dead-letter (1-100) |
+| `priority` | number | No | 5 | Priority level 1-10 (higher = processed first) |
+| `timeout` | number | No | - | Execution timeout in ms (1000-3600000) |
+
+### Query Parameters for `GET /jobs`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | number | Results per page (1-200, default: 20) |
+| `status` | string | Filter: pending, running, succeeded, failed, cancelled, dead_letter |
+| `q` | string | Search in job ID, type, or payload |
+| `cursor` | string | Pagination cursor |
+| `created_after` | ISO date | Filter jobs created after |
+| `created_before` | ISO date | Filter jobs created before |
+| `min_attempts` | number | Minimum attempts filter |
+| `max_attempts` | number | Maximum attempts filter |
+
+## Usage Examples
+
+### Create a Job
+
 ```bash
-cd packages/api
-npm run dev    # Development with hot reload
-npm run start  # Production (requires build first)
+curl -X POST http://localhost:3000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "sendEmail",
+    "payload": { "to": "user@example.com", "subject": "Hello" },
+    "maxAttempts": 5
+  }'
 ```
 
-Endpoints:
-- POST /jobs
-- POST /jobs/:id/cancel
-- POST /control/pause
-- POST /control/resume
-- GET /jobs (with filters: status, q, limit, offset)
-- GET /jobs/:id
-- GET /stats (dashboard metrics)
-- GET /health
-- GET /metrics
-- WebSocket: Socket.IO at /socket.io
+### Create High-Priority Job with Timeout
 
-# Running Worker
 ```bash
-cd packages/worker
-npm run dev
+curl -X POST http://localhost:3000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "urgentTask",
+    "payload": { "data": "important" },
+    "priority": 10,
+    "timeout": 30000
+  }'
 ```
 
-Worker metrics:
-```
-http://localhost:9100/metrics
+### Create with Idempotency Key
+
+```bash
+curl -X POST http://localhost:3000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "sendEmail",
+    "payload": { "to": "user@example.com" },
+    "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000"
+  }'
 ```
 
-# Examples
+### List Jobs with Filters
 
-## Idempotent Job
-```json
+```bash
+# List failed jobs
+curl "http://localhost:3000/jobs?status=failed&limit=10"
+
+# Search jobs
+curl "http://localhost:3000/jobs?q=sendEmail"
+
+# Date range filter
+curl "http://localhost:3000/jobs?created_after=2024-01-01T00:00:00Z"
+```
+
+### Pause/Resume Queue (with API key)
+
+```bash
+# Pause
+curl -X POST http://localhost:3000/control/pause \
+  -H "X-API-Key: your-api-key"
+
+# Resume
+curl -X POST http://localhost:3000/control/resume \
+  -H "X-API-Key: your-api-key"
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file based on `.env.example`:
+
+```bash
+# Database (Required in production)
+DATABASE_URL=postgresql://user:password@localhost:5432/jobs
+
+# Redis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# API
+PORT=3000
+NODE_ENV=development
+
+# Security (Optional - enables auth for sensitive endpoints)
+API_KEY=your-secret-api-key
+
+# Worker
+WORKER_CONCURRENCY=4
+SWEEP_INTERVAL_MS=1000
+SHUTDOWN_TIMEOUT_MS=30000
+
+# Frontend
+VITE_API_URL=http://localhost:3000
+```
+
+## Production Deployment
+
+### Using Docker Compose
+
+```bash
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with production values
+
+# Deploy
+cd infra
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### Production Features
+
+- **Resource Limits** - CPU/memory constraints per service
+- **Health Checks** - Automatic container health monitoring
+- **Restart Policies** - Auto-restart on failure
+- **Network Isolation** - Backend services not exposed externally
+- **Graceful Shutdown** - Workers wait for in-flight jobs (30s timeout)
+- **Persistent Volumes** - Data survives container restarts
+- **Priority Queues** - High-priority jobs processed first
+- **Job Timeouts** - Automatic timeout handling for hung jobs
+- **Worker Fleet Monitoring** - Real-time worker status tracking
+
+### Worker Fleet Monitoring
+
+Workers automatically register themselves and send heartbeats every 5 seconds. The dashboard provides:
+
+- **Worker Status** - Active, idle, draining, or offline
+- **Worker Metrics** - Jobs processed, jobs failed, uptime
+- **Current Job** - What job each worker is processing
+- **Stale Detection** - Workers marked offline after 30s without heartbeat
+
+```bash
+# List active workers
+curl http://localhost:3000/workers
+
+# Response
 {
-  "type": "sendEmail",
-  "payload": { "to": "user@example.com" },
-  "idempotencyKey": "email-123"
+  "workers": [
+    {
+      "id": "worker-macbook-12345-abc123",
+      "hostname": "macbook",
+      "pid": 12345,
+      "status": "active",
+      "concurrency": 4,
+      "jobs_processed": 150,
+      "jobs_failed": 2,
+      "current_job_id": "550e8400-e29b-41d4-a716-446655440000",
+      "last_heartbeat": "2024-01-15T10:30:00Z",
+      "started_at": "2024-01-15T08:00:00Z"
+    }
+  ],
+  "total": 1,
+  "active": 1
 }
 ```
 
-## Cancel Job
-```
-POST /jobs/:id/cancel
-→ { "status": "cancelled" }
-```
+### Monitoring Stack
 
-## Pause / Resume
-```
-POST /control/pause
-POST /control/resume
-```
+The production setup includes:
 
-# Testing Checklist (Postman)
-1. Idempotency — same ID returned for repeated submissions.
-2. Cancel pending job.
-3. Pause workers → queue grows.
-4. Resume workers → queue drains.
-5. Concurrency validation with slow handlers.
-6. Optimistic claim behavior validated.
+- **Prometheus** (port 9090) - Metrics collection
+- **Grafana** (port 3001) - Pre-configured dashboard
 
-# CI Pipeline
-```
-.github/workflows/ci.yml
-```
+Access Grafana at `http://localhost:3001` (default: admin/admin)
 
-Runs on push/PR to main:
-1. **Build & Test Job:**
-   - build (includes TypeScript compilation)
-   - lint
-   - unit tests
-   - frontend tests (86 Vitest tests)
+## Testing
 
-2. **Integration Tests Job:**
-   - build
-   - integration tests (with Docker containers)
+```bash
+# Run all tests
+npm test
 
-# Environment Variables
-```
-REDIS_HOST=redis
-REDIS_PORT=6379
-WORKER_CONCURRENCY=4
-SWEEP_INTERVAL_MS=1000
-DATABASE_URL=postgres://dev:dev@postgres:5432/jobs
-VITE_API_URL=http://localhost:3000  # Frontend only (optional)
+# Run specific test suites
+npm run test:unit        # Unit tests (Jest)
+npm run test:frontend    # Frontend tests (Vitest) - 89 tests
+npm run test:integration # Integration tests (requires Docker)
+
+# E2E tests (Playwright)
+cd packages/frontend && npx playwright test
 ```
 
-# Screenshots
+## Project Structure
 
-## Dashboard
-The main dashboard shows:
-- Tabs for All Jobs / Dead Letter queue
-- Search and status filters
-- Real-time job list with status pills
-- Pagination controls
-- Job details panel
-- Metrics panel with queue statistics
-- Pause/Resume controls
+```
+job-queue/
+├── packages/
+│   ├── api/                 # Express API server
+│   │   └── src/
+│   │       ├── server.ts    # Routes, validation, Swagger
+│   │       ├── socket.ts    # Socket.IO setup
+│   │       └── start.ts     # Server entry point
+│   ├── worker/              # Job processor
+│   │   └── src/
+│   │       ├── worker.ts    # Main worker loop
+│   │       ├── handlers/    # Job type handlers
+│   │       └── utils/       # Backoff logic
+│   ├── common/              # Shared code
+│   │   └── src/
+│   │       ├── db.ts        # PostgreSQL pool
+│   │       ├── logger.ts    # Pino logger
+│   │       ├── metrics.ts   # Prometheus metrics
+│   │       └── types.ts     # TypeScript types
+│   └── frontend/            # React dashboard
+│       └── src/
+│           ├── components/  # UI components
+│           ├── hooks/       # React Query hooks
+│           ├── api/         # API client
+│           └── sockets/     # Socket.IO client
+├── infra/
+│   ├── docker-compose.yml      # Development
+│   ├── docker-compose.prod.yml # Production
+│   ├── init.sql                # Database schema
+│   ├── prometheus.yml          # Prometheus config
+│   └── grafana-dashboard.json  # Grafana dashboard
+├── tests/
+│   ├── unit/                # Unit tests
+│   └── integration/         # Integration tests
+└── .github/
+    └── workflows/
+        └── ci.yml           # GitHub Actions CI
+```
 
----
+## Real-time Events
 
-**Complete** ✓
+The API broadcasts events via Socket.IO (with Redis pub/sub for multi-instance):
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `job_created` | Job object | New job submitted |
+| `job_updated` | Job object | Job status changed |
+| `job_deleted` | `{ jobId }` | Job was deleted |
+| `queue_paused` | `{ paused: true }` | Queue paused |
+| `queue_resumed` | `{ paused: false }` | Queue resumed |
+
+### Connecting from Client
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000');
+
+socket.on('job_created', (job) => console.log('New job:', job));
+socket.on('job_updated', (job) => console.log('Job updated:', job));
+```
+
+## Job Lifecycle
+
+```
+┌─────────┐     ┌─────────┐     ┌───────────┐
+│ pending │────▶│ running │────▶│ succeeded │
+└─────────┘     └────┬────┘     └───────────┘
+                     │
+                     │ (error)
+                     ▼
+              ┌──────────┐     ┌─────────────┐
+              │  failed  │────▶│ dead_letter │
+              │ (retry)  │     │ (max attempts)
+              └──────────┘     └─────────────┘
+                     │
+                     │ (backoff)
+                     ▼
+              ┌─────────┐
+              │ pending │ (scheduled retry)
+              └─────────┘
+```
+
+## Adding Job Handlers
+
+Create a new handler in `packages/worker/src/handlers/index.ts`:
+
+```typescript
+const handlers: Record<string, Handler> = {
+  sendEmail: async (jobId, payload) => {
+    // Your logic here
+    console.log(`Sending email to ${payload.to}`);
+  },
+  
+  processImage: async (jobId, payload) => {
+    // Image processing logic
+  },
+  
+  // Add more handlers...
+};
+```
+
+## Security
+
+- **Helmet** - Security headers (XSS, clickjacking, etc.)
+- **Rate Limiting** - 1000 req/15min general, 100 for control endpoints
+- **Input Validation** - Zod schemas for all inputs
+- **API Key Auth** - Optional protection for sensitive endpoints
+- **UUID Validation** - Validates job IDs before database queries
+- **Payload Size Limit** - 1MB max request body
+
+## CI/CD Pipeline
+
+GitHub Actions runs on every push/PR:
+
+1. **Backend Tests** - Build, lint, unit tests
+2. **Frontend Tests** - Vitest (89 tests)
+3. **Integration Tests** - Docker-based API tests
+
+## License
+
+MIT
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `npm test`
+5. Submit a pull request

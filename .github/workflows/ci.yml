@@ -6,53 +6,144 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  # Parallel job: Lint
+  lint:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Run lint
+      - run: npm ci
+      - name: Lint
         run: npm run lint || true
 
+  # Parallel job: Build
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build all packages
+        run: npm run build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            packages/*/dist
+            packages/frontend/dist
+
+  # Parallel job: Unit tests
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Run frontend tests
-        run: npm run test:frontend
-
-  integration-tests:
+  # Parallel job: Frontend tests
+  frontend-tests:
     runs-on: ubuntu-latest
-    needs: build-and-test
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+      - run: npm ci
+      - name: Run frontend tests
+        run: npm run test:frontend
+      - name: Build frontend
+        run: npm run build -w frontend
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
+  # Sequential job: Integration tests (requires Docker)
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages
       - name: Run integration tests
         run: npm run test:integration
+
+  # E2E tests (requires full stack)
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [build]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: dev
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: jobs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages
+      - name: Initialize database
+        run: psql -h localhost -U dev -d jobs -f infra/init.sql
+        env:
+          PGPASSWORD: dev
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: packages/frontend
+      - name: Start API server
+        run: npm run start &
+        working-directory: packages/api
+        env:
+          DATABASE_URL: postgres://dev:dev@localhost:5432/jobs
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          PORT: 3000
+      - name: Wait for API
+        run: npx wait-on http://localhost:3000/health -t 30000
+      - name: Run E2E tests
+        run: npm run test:e2e
+        working-directory: packages/frontend
+        env:
+          VITE_API_URL: http://localhost:3000

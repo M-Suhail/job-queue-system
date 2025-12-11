@@ -388,24 +388,36 @@ describe('GET /jobs (list)', () => {
     expect(resp.body.data).toHaveLength(3);
     expect(resp.body.pagination.total).toBe(3);
     expect(resp.body.pagination).toHaveProperty('limit');
-    expect(resp.body.pagination).toHaveProperty('offset');
     expect(resp.body.pagination).toHaveProperty('hasMore');
   });
 
-  test('supports limit and offset pagination', async () => {
+  test('supports cursor-based pagination', async () => {
     // Create 5 jobs
     for (let i = 0; i < 5; i++) {
       await request.post('/jobs').send({ type: `job-${i}`, payload: { index: i } });
+      await new Promise(r => setTimeout(r, 10)); // Small delay to ensure different timestamps
     }
 
-    const resp = await request
-      .get('/jobs?limit=2&offset=2')
+    // First page with limit 2
+    const page1 = await request
+      .get('/jobs?limit=2')
       .expect(200);
 
-    expect(resp.body.data).toHaveLength(2);
-    expect(resp.body.pagination.total).toBe(5);
-    expect(resp.body.pagination.limit).toBe(2);
-    expect(resp.body.pagination.offset).toBe(2);
+    expect(page1.body.data).toHaveLength(2);
+    expect(page1.body.pagination.total).toBe(5);
+    expect(page1.body.pagination.hasMore).toBe(true);
+    expect(page1.body.pagination).toHaveProperty('nextCursor');
+
+    // Second page using cursor
+    const cursor = page1.body.pagination.nextCursor;
+    const page2 = await request
+      .get(`/jobs?limit=2&cursor=${encodeURIComponent(cursor)}`)
+      .expect(200);
+
+    expect(page2.body.data).toHaveLength(2);
+    expect(page2.body.pagination.hasMore).toBe(true);
+    // Should not include total on subsequent pages
+    expect(page2.body.pagination.total).toBeUndefined();
   });
 
   test('filters by status', async () => {

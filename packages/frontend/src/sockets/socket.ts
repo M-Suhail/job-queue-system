@@ -22,6 +22,14 @@ export function connectSocket(baseUrl: string | undefined, qc: QueryClient) {
       console.error('socket job_updated', e)
     }
   })
+  socket.on('job_deleted', (payload: { jobId: string }) => {
+    try {
+      qc.setQueryData(['jobs'], (old: Job[] | undefined) => (old || []).filter((j) => j.id !== payload.jobId))
+      qc.removeQueries({ queryKey: ['job', payload.jobId] })
+    } catch (e) {
+      console.error('socket job_deleted', e)
+    }
+  })
   socket.on('queue_paused', (payload: { paused: boolean }) => {
     qc.setQueryData(['queue', 'paused'], payload.paused)
   })

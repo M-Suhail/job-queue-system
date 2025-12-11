@@ -99,7 +99,29 @@ describe('JobDetails', () => {
 
     await waitFor(() => {
       const cancelButton = screen.getByText('Cancel')
-      expect(cancelButton).toHaveClass('bg-red-600', 'text-white')
+      expect(cancelButton).toHaveClass('bg-yellow-600', 'text-white')
+    })
+  })
+
+  it('shows Retry button for dead_letter jobs', async () => {
+    vi.mocked(client.fetchJob).mockResolvedValueOnce({ ...mockJob, status: 'dead_letter' })
+
+    render(<JobDetails jobId="job-123" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Retry')).toBeInTheDocument()
+      expect(screen.getByText('Delete')).toBeInTheDocument()
+    })
+  })
+
+  it('shows Delete button for completed jobs', async () => {
+    vi.mocked(client.fetchJob).mockResolvedValueOnce({ ...mockJob, status: 'succeeded' })
+
+    render(<JobDetails jobId="job-123" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Delete')).toBeInTheDocument()
+      expect(screen.queryByText('Cancel')).not.toBeInTheDocument()
     })
   })
 })

@@ -45,6 +45,10 @@ export function setupSocket(server: http.Server) {
         io?.emit('job_updated', payload.job);
         logger.debug({ jobId: payload.job?.id }, 'emitted job_updated');
       }
+      if (payload.type === 'job_deleted') {
+        io?.emit('job_deleted', { jobId: payload.jobId });
+        logger.debug({ jobId: payload.jobId }, 'emitted job_deleted');
+      }
       if (payload.type === 'queue_paused') {
         io?.emit('queue_paused', { paused: true });
       }
@@ -77,5 +81,13 @@ export function emitJobUpdated(job: any) {
   if (io) {
     io.emit('job_updated', job);
     logger.debug({ jobId: job?.id }, 'emitted job_updated (direct)');
+  }
+}
+
+// Close Socket.IO server gracefully
+export function closeSocket() {
+  if (io) {
+    io.close();
+    io = null;
   }
 }

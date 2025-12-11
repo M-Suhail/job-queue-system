@@ -4,20 +4,21 @@ import JobList from './JobList/JobList'
 import JobDetails from './JobDetails'
 import Controls from './Controls'
 import MetricsPanel from './MetricsPanel'
+import WorkersPanel from './WorkersPanel'
 import JobFilters from './JobList/JobFilters'
-import Pagination from './Pagination'
 import { connectSocket, disconnectSocket } from '../sockets/socket'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Job } from '../api/types'
 import type { JobFilters as JobFiltersType } from '../api/client'
 
-type Tab = 'all' | 'dead_letter'
+type Tab = 'all' | 'dead_letter' | 'workers'
 const PAGE_SIZE = 20
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('all')
-  const [filters, setFilters] = useState<JobFiltersType>({ limit: PAGE_SIZE, offset: 0 })
+  const [filters, setFilters] = useState<JobFiltersType>({ limit: PAGE_SIZE })
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [cursors, setCursors] = useState<string[]>([]) // Stack of cursors for back navigation
   const qc = useQueryClient()
 
   // Apply dead_letter filter when on that tab
@@ -29,8 +30,8 @@ export default function Dashboard() {
   
   const jobs = data?.data ?? []
   const pagination = data?.pagination
-  const currentPage = pagination ? Math.floor(pagination.offset / pagination.limit) + 1 : 1
-  const totalPages = pagination ? Math.ceil(pagination.total / pagination.limit) : 1
+  const hasNextPage = pagination?.hasMore ?? false
+  const hasPrevPage = cursors.length > 0
 
   useEffect(() => {
     connectSocket(import.meta.env.VITE_API_URL as string | undefined, qc)
@@ -42,23 +43,45 @@ export default function Dashboard() {
   const handleFilterChange = (newFilters: Record<string, string>) => {
     setFilters(prev => ({
       ...prev,
-      ...newFilters,
-      offset: 0, // Reset to first page on filter change
+      cursor: undefined, // Reset to first page on filter change
       status: newFilters.status === '' ? undefined : (newFilters.status ?? prev.status),
       q: newFilters.q === '' ? undefined : (newFilters.q ?? prev.q),
+      created_after: newFilters.created_after === '' ? undefined : (newFilters.created_after ?? prev.created_after),
+      created_before: newFilters.created_before === '' ? undefined : (newFilters.created_before ?? prev.created_before),
+      min_attempts: newFilters.min_attempts === '' ? undefined : (newFilters.min_attempts ? parseInt(newFilters.min_attempts) : prev.min_attempts),
+      max_attempts: newFilters.max_attempts === '' ? undefined : (newFilters.max_attempts ? parseInt(newFilters.max_attempts) : prev.max_attempts),
     }))
+    setCursors([]) // Clear cursor history
   }
 
-  const handlePageChange = (page: number) => {
-    setFilters(prev => ({
-      ...prev,
-      offset: (page - 1) * PAGE_SIZE
-    }))
+  const handleNextPage = () => {
+    if (pagination?.nextCursor) {
+      // Save current cursor to history
+      setCursors(prev => [...prev, filters.cursor || ''])
+      setFilters(prev => ({
+        ...prev,
+        cursor: pagination.nextCursor!
+      }))
+    }
+  }
+
+  const handlePrevPage = () => {
+    if (cursors.length > 0) {
+      // Pop the last cursor from history
+      const newCursors = [...cursors]
+      const prevCursor = newCursors.pop()!
+      setCursors(newCursors)
+      setFilters(prev => ({
+        ...prev,
+        cursor: prevCursor || undefined
+      }))
+    }
   }
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)
-    setFilters({ limit: PAGE_SIZE, offset: 0 })
+    setFilters({ limit: PAGE_SIZE })
+    setCursors([])
   }
 
   return (
@@ -78,37 +101,66 @@ export default function Dashboard() {
           >
             Dead Letter
           </button>
+          <button
+            onClick={() => handleTabChange('workers')}
+            className={`px-4 py-2 font-medium cursor-pointer ${activeTab === 'workers' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Workers
+          </button>
         </div>
 
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium">
-            {activeTab === 'all' ? 'Recent jobs' : 'Dead Letter Queue'}
-            {pagination && <span className="text-sm text-slate-500 ml-2">({pagination.total} total)</span>}
-          </h2>
-          <div className="flex items-center gap-3">
-            <button onClick={() => refetch()} className="px-3 py-1 bg-white border rounded hover:bg-slate-50 cursor-pointer">
-              {isLoading ? 'Loading...' : 'Refresh'}
-            </button>
-            <Controls />
-          </div>
-        </div>
+        {/* Workers Tab Content */}
+        {activeTab === 'workers' ? (
+          <WorkersPanel />
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium">
+                {activeTab === 'all' ? 'Recent jobs' : 'Dead Letter Queue'}
+                {pagination?.total && <span className="text-sm text-slate-500 ml-2">({pagination.total} total)</span>}
+              </h2>
+              <div className="flex items-center gap-3">
+                <button onClick={() => refetch()} className="px-3 py-1 bg-white border rounded hover:bg-slate-50 cursor-pointer">
+                  {isLoading ? 'Loading...' : 'Refresh'}
+                </button>
+                <Controls />
+              </div>
+            </div>
 
-        {/* Filters - only show on All Jobs tab */}
-        {activeTab === 'all' && (
-          <div className="mb-4">
-            <JobFilters onChange={handleFilterChange} />
-          </div>
+            {/* Filters - only show on All Jobs tab */}
+            {activeTab === 'all' && (
+              <div className="mb-4">
+                <JobFilters onChange={handleFilterChange} />
+              </div>
+            )}
+
+            <div className="bg-white rounded shadow overflow-hidden">
+              <JobList jobs={jobs as Job[]} onSelect={(id) => setSelectedId(id)} />
+              {/* Cursor-based pagination controls */}
+              {(hasPrevPage || hasNextPage) && (
+                <div className="flex items-center justify-between px-4 py-3 border-t">
+                  <button
+                    onClick={handlePrevPage}
+                    disabled={!hasPrevPage || isLoading}
+                    className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm text-slate-600">
+                    Page {cursors.length + 1}
+                  </span>
+                  <button
+                    onClick={handleNextPage}
+                    disabled={!hasNextPage || isLoading}
+                    className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
-
-        <div className="bg-white rounded shadow overflow-hidden">
-          <JobList jobs={jobs as Job[]} onSelect={(id) => setSelectedId(id)} />
-          <Pagination 
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-            isLoading={isLoading}
-          />
-        </div>
       </section>
 
       <aside className="col-span-1">

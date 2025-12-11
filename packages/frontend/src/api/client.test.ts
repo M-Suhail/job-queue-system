@@ -34,16 +34,16 @@ describe('API Client', () => {
       expect(result.pagination.total).toBe(4)
     })
 
-    it('fetches jobs with custom limit and offset', async () => {
+    it('fetches jobs with custom limit and cursor', async () => {
       const paginatedResponse = {
         data: mockJobs.slice(0, 2),
-        pagination: { total: 4, limit: 2, offset: 0, hasMore: true }
+        pagination: { limit: 2, hasMore: true, nextCursor: '2024-01-01T00:00:00Z_abc123' }
       }
       mockApi.get.mockResolvedValueOnce({ data: paginatedResponse })
 
-      const result = await fetchJobs({ limit: 2, offset: 0 })
+      const result = await fetchJobs({ limit: 2, cursor: '2024-01-01T00:00:00Z_xyz789' })
 
-      expect(mockApi.get).toHaveBeenCalledWith('/jobs?limit=2')
+      expect(mockApi.get).toHaveBeenCalledWith('/jobs?limit=2&cursor=2024-01-01T00%3A00%3A00Z_xyz789')
       expect(result.data).toHaveLength(2)
       expect(result.pagination.hasMore).toBe(true)
     })

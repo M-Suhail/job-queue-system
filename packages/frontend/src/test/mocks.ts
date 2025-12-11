@@ -69,7 +69,7 @@ export const mockPaginatedJobs = {
   pagination: {
     total: 4,
     limit: 20,
-    offset: 0,
-    hasMore: false
+    hasMore: false,
+    nextCursor: null
   }
 }
