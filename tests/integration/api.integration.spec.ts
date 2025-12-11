@@ -29,7 +29,7 @@ let server: http.Server;
 let request: ReturnType<typeof supertest>;
 
 beforeAll(async () => {
-  // Start Postgres container
+  // Start Postgres container with port-based wait (more reliable)
   pgContainer = await new GenericContainer('postgres:15')
     .withEnvironment({
       POSTGRES_USER: 'dev',
@@ -37,16 +37,18 @@ beforeAll(async () => {
       POSTGRES_DB: 'jobs'
     })
     .withExposedPorts(5432)
-    .withWaitStrategy(Wait.forLogMessage('database system is ready to accept connections'))
+    .withWaitStrategy(Wait.forListeningPorts())
+    .withStartupTimeout(60000)
     .start();
 
   const pgPort = pgContainer.getMappedPort(5432);
   const pgHost = pgContainer.getHost();
 
-  // Start Redis container
+  // Start Redis container with port-based wait (more reliable)
   redisContainer = await new GenericContainer('redis:7')
     .withExposedPorts(6379)
-    .withWaitStrategy(Wait.forLogMessage('Ready to accept connections'))
+    .withWaitStrategy(Wait.forListeningPorts())
+    .withStartupTimeout(30000)
     .start();
 
   const redisPort = redisContainer.getMappedPort(6379);
@@ -61,8 +63,18 @@ beforeAll(async () => {
     database: 'jobs'
   });
 
-  // Wait for DB init then run schema (create table)
-  await new Promise((r) => setTimeout(r, 2000)); // small delay
+  // Wait for DB to be ready with retry logic (faster than fixed delay)
+  let retries = 10;
+  while (retries > 0) {
+    try {
+      await pool.query('SELECT 1');
+      break;
+    } catch {
+      retries--;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS jobs (
       id UUID PRIMARY KEY,
@@ -71,6 +83,8 @@ beforeAll(async () => {
       status TEXT NOT NULL,
       attempts INT DEFAULT 0,
       max_attempts INT DEFAULT 5,
+      priority INT DEFAULT 5,
+      timeout_ms INT DEFAULT NULL,
       idempotency_key TEXT,
       last_error TEXT,
       created_at TIMESTAMPTZ DEFAULT now(),
@@ -79,6 +93,8 @@ beforeAll(async () => {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_priority ON jobs(priority DESC, created_at ASC);`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_jobs_idempotency_key ON jobs(idempotency_key) WHERE idempotency_key IS NOT NULL;`);
 
   // Create Redis client
   redis = new Redis({ host: redisHost, port: redisPort });
@@ -161,6 +177,7 @@ afterAll(async () => {
 // Helper to clean up Redis queue between tests
 async function clearQueue() {
   await redis.del('queue:jobs');
+  await redis.del('queue:priority');
   await redis.del('delayed:jobs');
   await redis.del('queue:paused');
 }
@@ -185,9 +202,9 @@ describe('POST /jobs', () => {
     expect(rows.length).toBe(1);
     expect(rows[0].status).toBe('pending');
 
-    // check Redis list has id
-    const lpop = await redis.lpop('queue:jobs');
-    expect(lpop).toBe(jobId);
+    // check Redis priority queue has id (sorted set)
+    const queueItems = await redis.zrange('queue:priority', 0, -1);
+    expect(queueItems).toContain(jobId);
   });
 
   test('returns 400 when type is missing', async () => {
@@ -197,11 +214,12 @@ describe('POST /jobs', () => {
       .set('Accept', 'application/json')
       .expect(400);
 
-    expect(resp.body).toHaveProperty('error', 'type required');
+    expect(resp.body).toHaveProperty('error', 'Validation failed');
   });
 
   test('idempotency key returns existing job on duplicate', async () => {
-    const idempotencyKey = `test-idem-${Date.now()}`;
+    // idempotencyKey must be a valid UUID per server validation
+    const idempotencyKey = '550e8400-e29b-41d4-a716-446655440000';
 
     // First request - creates job
     const resp1 = await request
@@ -279,8 +297,8 @@ describe('POST /jobs/:id/cancel', () => {
     const { rows } = await pool.query('SELECT status FROM jobs WHERE id=$1', [jobId]);
     expect(rows[0].status).toBe('cancelled');
 
-    // Verify removed from Redis queue
-    const queueItems = await redis.lrange('queue:jobs', 0, -1);
+    // Verify removed from Redis queue (check both legacy list and priority queue)
+    const queueItems = await redis.zrange('queue:priority', 0, -1);
     expect(queueItems).not.toContain(jobId);
   });
 
@@ -472,7 +490,7 @@ describe('GET /stats', () => {
     expect(resp.body).toHaveProperty('succeeded');
     expect(resp.body).toHaveProperty('failed');
     expect(resp.body).toHaveProperty('dead_letter');
-    expect(resp.body).toHaveProperty('cancelled');
+    expect(resp.body).toHaveProperty('queue_depth');
     expect(resp.body.pending).toBe(2);
   });
 

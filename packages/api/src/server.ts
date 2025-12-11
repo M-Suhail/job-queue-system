@@ -590,8 +590,9 @@ app.post('/jobs/:id/cancel', async (req, res) => {
       return res.status(409).json({ error: `cannot cancel job with status ${status}` });
     }
 
-    // Remove from Redis ready queue and delayed zset, and set cancelled in DB
+    // Remove from Redis ready queue, priority queue, and delayed zset, and set cancelled in DB
     await redis.lrem('queue:jobs', 0, id); // remove from ready list
+    await redis.zrem('queue:priority', id); // remove from priority queue
     await redis.zrem('delayed:jobs', id); // remove from delayed set
 
     await query('UPDATE jobs SET status=$1, updated_at=now() WHERE id=$2', ['cancelled', id]);

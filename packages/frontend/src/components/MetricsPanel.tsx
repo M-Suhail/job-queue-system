@@ -6,7 +6,7 @@ export default function MetricsPanel() {
   if (isLoading) {
     return (
       <div className="bg-white p-4 rounded shadow">
-        <h4 className="font-medium mb-2">Metrics</h4>
+        <h4 className="font-medium mb-2">Queue Metrics</h4>
         <div className="text-sm text-slate-500">Loading...</div>
       </div>
     )
@@ -15,7 +15,7 @@ export default function MetricsPanel() {
   if (isError) {
     return (
       <div className="bg-white p-4 rounded shadow">
-        <h4 className="font-medium mb-2">Metrics</h4>
+        <h4 className="font-medium mb-2">Queue Metrics</h4>
         <div className="text-sm text-red-500">Failed to load metrics</div>
       </div>
     )
@@ -23,7 +23,7 @@ export default function MetricsPanel() {
   
   return (
     <div className="bg-white p-4 rounded shadow">
-      <h4 className="font-medium mb-2">Metrics</h4>
+      <h4 className="font-medium mb-2">Queue Metrics</h4>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div className="p-2 border rounded">
           <div className="text-slate-500">Queue depth</div>
