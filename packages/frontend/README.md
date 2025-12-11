@@ -1,73 +1,86 @@
-# React + TypeScript + Vite
+# Job Queue Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React dashboard for the Job Queue System with real-time updates via Socket.IO.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 📊 Real-time job monitoring dashboard
+- 🔍 Job filtering and search
+- 📈 Queue metrics visualization
+- 👷 Worker status panel
+- 💀 Dead letter queue management
+- ⏸️ Pause/Resume queue controls
 
-## React Compiler
+## Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Install dependencies
+npm install
 
-## Expanding the ESLint configuration
+# Start development server
+npm run dev
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Build for production
+npm run build
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Preview production build
+npm run preview
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Testing
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+# Run unit tests (Vitest)
+npm test
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Run tests in watch mode
+npm run test:watch
+
+# Run E2E tests (Playwright)
+npx playwright install chromium  # First time only
+npx playwright test
+
+# Run E2E tests with UI
+npx playwright test --ui
+
+# View E2E test report
+npx playwright show-report
 ```
+
+### Test Coverage
+
+| Type | Framework | Tests |
+|------|-----------|-------|
+| Unit Tests | Vitest | 89 |
+| E2E Tests | Playwright | 11 |
+
+## Project Structure
+
+```
+src/
+├── api/           # API client and types
+├── components/    # React components
+│   ├── JobList/   # Job listing components
+│   └── Layout/    # Layout components
+├── hooks/         # Custom React hooks
+├── pages/         # Page components
+├── sockets/       # Socket.IO client
+├── test/          # Test utilities
+└── utils/         # Utility functions
+
+e2e/               # Playwright E2E tests
+```
+
+## Environment
+
+The frontend expects the API server at `http://localhost:3000` during development.
+
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- Socket.IO Client
+- Vitest + React Testing Library
+- Playwright

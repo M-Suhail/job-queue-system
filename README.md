@@ -307,13 +307,25 @@ Access Grafana at `http://localhost:3001` (default: admin/admin)
 npm test
 
 # Run specific test suites
-npm run test:unit        # Unit tests (Jest)
-npm run test:frontend    # Frontend tests (Vitest) - 89 tests
-npm run test:integration # Integration tests (requires Docker)
+npm run test:unit           # Unit tests (Jest)
+npm run test:frontend       # Frontend tests (Vitest) - 89 tests
+npm run test:integration    # Integration tests (requires Docker - uses testcontainers)
+npm run test:integration:ci # Integration tests for CI (uses GitHub Actions services)
 
 # E2E tests (Playwright)
-cd packages/frontend && npx playwright test
+cd packages/frontend
+npx playwright install chromium  # Install browser (first time only)
+npx playwright test              # Run all E2E tests
 ```
+
+### Test Structure
+
+| Test Suite | Framework | Count | Requirements |
+|------------|-----------|-------|--------------|
+| Unit Tests | Jest | ~5 | None |
+| Frontend Tests | Vitest | 89 | None |
+| Integration Tests | Jest + Testcontainers | 19 | Docker |
+| E2E Tests | Playwright | 11 | Running API + Frontend |
 
 ## Project Structure
 
