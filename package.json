@@ -11,7 +11,8 @@
     "test": "cross-env NODE_ENV=test jest --runInBand",
     "test:unit": "cross-env NODE_ENV=test jest --testPathPatterns=tests/unit",
     "test:frontend": "npm run test -w frontend",
-    "test:integration": "cross-env NODE_ENV=test jest --testPathPatterns=tests/integration --runInBand --detectOpenHandles",
+    "test:integration": "cross-env NODE_ENV=test jest --testPathPatterns=tests/integration/api.integration.spec.ts --runInBand --detectOpenHandles",
+    "test:integration:ci": "cross-env NODE_ENV=test jest --testPathPatterns=tests/integration/api.integration.ci.spec.ts --runInBand --detectOpenHandles --forceExit",
     "test:watch": "cross-env NODE_ENV=test jest --watch"
   },
   "devDependencies": {

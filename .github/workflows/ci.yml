@@ -67,11 +67,34 @@ jobs:
       - name: Build frontend
         run: npm run build -w frontend
 
-  # Sequential job: Integration tests (requires Docker)
+  # Integration tests - skip testcontainers in CI, use services instead
   integration-tests:
     runs-on: ubuntu-latest
     needs: [build]
-    timeout-minutes: 10
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: dev
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: jobs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -84,13 +107,22 @@ jobs:
         with:
           name: build-artifacts
           path: packages
+      - name: Initialize database
+        run: psql -h localhost -U dev -d jobs -f infra/init.sql
+        env:
+          PGPASSWORD: dev
       - name: Run integration tests
-        run: npm run test:integration
+        run: npm run test:integration:ci
+        env:
+          DATABASE_URL: postgres://dev:dev@localhost:5432/jobs
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
 
   # E2E tests (requires full stack)
   e2e-tests:
     runs-on: ubuntu-latest
     needs: [build]
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:15
@@ -134,7 +166,9 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: packages/frontend
       - name: Start API server
-        run: npm run start &
+        run: |
+          node dist/start.js &
+          sleep 5
         working-directory: packages/api
         env:
           DATABASE_URL: postgres://dev:dev@localhost:5432/jobs
@@ -142,7 +176,12 @@ jobs:
           REDIS_PORT: 6379
           PORT: 3000
       - name: Wait for API
-        run: npx wait-on http://localhost:3000/health -t 30000
+        run: |
+          for i in {1..30}; do
+            curl -s http://localhost:3000/health && break
+            echo "Waiting for API... ($i)"
+            sleep 1
+          done
       - name: Run E2E tests
         run: npm run test:e2e
         working-directory: packages/frontend

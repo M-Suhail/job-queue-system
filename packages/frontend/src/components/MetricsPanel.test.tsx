@@ -53,11 +53,11 @@ describe('MetricsPanel', () => {
     })
   })
 
-  it('displays Metrics title', () => {
+  it('displays Queue Metrics title', () => {
     vi.mocked(client.api.get).mockResolvedValueOnce({ data: mockMetrics })
 
     render(<MetricsPanel />)
 
-    expect(screen.getByText('Metrics')).toBeInTheDocument()
+    expect(screen.getByText('Queue Metrics')).toBeInTheDocument()
   })
 })
